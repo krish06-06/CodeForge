@@ -1,0 +1,36 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.codeforge'
+version = '1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+javafx {
+    version = "21"
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
+application {
+    // If you created the Launcher.java as we discussed, use that here
+    mainClass = 'com.codeforge.Launcher' 
+}
+
+
+
+// PASTE IT HERE:
+dependencies {
+    implementation "org.openjfx:javafx-controls:21"
+    implementation "org.openjfx:javafx-fxml:21"
+    implementation "org.openjfx:javafx-graphics:21"
+    
+    // This is the library for the actual code area (syntax highlighting)
+    implementation 'org.fxmisc.richtext:richtextfx:0.11.2' 
+}

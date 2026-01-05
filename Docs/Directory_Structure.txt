@@ -1,0 +1,45 @@
+CodeForge/
+│
+├── build.gradle
+├── settings.gradle
+├── gradlew
+├── gradlew.bat
+├── gradle/
+│   └── wrapper/
+│
+├── src/
+│   └── main/
+│       ├── java/
+│       │   └── com/
+│       │       └── codeforge/
+│       │           │
+│       │           ├── MainApp.java
+│       │           │
+│       │           ├── editor/
+│       │           │   ├── CodeEditor.java
+│       │           │   └── EditorController.java
+│       │           │
+│       │           ├── terminal/
+│       │           │   ├── TerminalView.java
+│       │           │   └── TerminalController.java
+│       │           │
+│       │           ├── runner/
+│       │           │   └── PythonRunner.java
+│       │           │
+│       │           ├── file/
+│       │           │   └── FileManager.java
+│       │           │
+│       │           └── utils/
+│       │               ├── OSUtils.java
+│       │               └── ProcessUtils.java
+│       │
+│       └── resources/
+│           ├── styles/
+│           │   └── theme.css
+│           │
+│           └── icons/
+│               └── codeforge.png
+│
+├── .gitignore
+├── README.md
+└── LICENSE

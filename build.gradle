@@ -19,13 +19,13 @@ javafx {
 }
 
 application {
-    // If you created the Launcher.java as we discussed, use that here
+   
     mainClass = 'com.codeforge.Launcher' 
 }
 
 
 
-// PASTE IT HERE:
+
 dependencies {
     implementation "org.openjfx:javafx-controls:21"
     implementation "org.openjfx:javafx-fxml:21"

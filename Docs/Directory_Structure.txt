@@ -13,6 +13,8 @@ CodeForge/
 │       │   └── com/
 │       │       └── codeforge/
 │       │           │
+|       |           |──Launcher.java
+|       |           |
 │       │           ├── MainApp.java
 │       │           │
 │       │           ├── editor/

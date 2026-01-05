@@ -18,12 +18,13 @@ public class EditorController {
 
     public void runCode() {
 
+        terminal.clear();                 // 🔥 clear old output
         terminal.print("▶ Running...\n");
 
         try {
             Process process = PythonRunner.run(editor.getCode());
 
-            // Output stream thread
+            // Output stream thread (stdout + stderr merged)
             new Thread(() -> {
                 try (BufferedReader reader =
                      new BufferedReader(
@@ -31,16 +32,16 @@ public class EditorController {
 
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        terminal.print(line);
+                        terminal.print(line + "\n");
                     }
 
                 } catch (Exception e) {
-                    terminal.print("Error: " + e.getMessage());
+                    terminal.print("Error: " + e.getMessage() + "\n");
                 }
-            }).start();
+            }, "Python-Output-Thread").start();
 
         } catch (Exception e) {
-            terminal.print("Failed to run: " + e.getMessage());
+            terminal.print("Failed to run: " + e.getMessage() + "\n");
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.codeforge.terminal;
 
+import javafx.application.Platform;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 
@@ -17,8 +18,14 @@ public class TerminalView {
         root = new BorderPane(terminal);
     }
 
+    // Existing method (unchanged signature)
     public void print(String text) {
-        terminal.appendText(text + "\n");
+        Platform.runLater(() -> terminal.appendText(text));
+    }
+
+    // 🔥 NEW method (does not break anything)
+    public void clear() {
+        Platform.runLater(() -> terminal.clear());
     }
 
     public BorderPane getView() {

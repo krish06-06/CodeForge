@@ -13,9 +13,8 @@ CodeForge/
 │       │   └── com/
 │       │       └── codeforge/
 │       │           │
-|       |           |──Launcher.java
-|       |           |
-│       │           ├── MainApp.java
+│       │           ├── Launcher.java              
+│       │           ├── MainApp.java               # JavaFX UI
 │       │           │
 │       │           ├── editor/
 │       │           │   ├── CodeEditor.java
@@ -26,14 +25,38 @@ CodeForge/
 │       │           │   └── TerminalController.java
 │       │           │
 │       │           ├── runner/
-│       │           │   └── PythonRunner.java
+│       │           │   └── PythonRunner.java      # External Python runner
 │       │           │
 │       │           ├── file/
 │       │           │   └── FileManager.java
 │       │           │
-│       │           └── utils/
-│       │               ├── OSUtils.java
-│       │               └── ProcessUtils.java
+│       │           ├── utils/
+│       │           │   ├── OSUtils.java
+│       │           │   └── ProcessUtils.java
+│       │           │
+│       │           └── compiler/                  
+│       │               ├── CompilerMain.java     # Terminal runner for compiler
+│       │               ├── PythonCompilerRunner.java
+│       │               │
+│       │               ├── token/
+│       │               │   ├── Token.java
+│       │               │   └── TokenType.java
+│       │               │
+│       │               ├── lexer/
+│       │               │   └── Lexer.java
+│       │               │
+│       │               ├── parser/
+│       │               │   └── Parser.java
+│       │               │
+│       │               ├── ast/
+│       │               │   └── Node files(.java)
+│       │               │
+│       │               ├── bytecode/
+│       │               │   ├── OpCode.java
+│       │               │   └── Instruction.java
+│       │               │
+│       │               └── vm/
+│       │                   └── VirtualMachine.java
 │       │
 │       └── resources/
 │           ├── styles/

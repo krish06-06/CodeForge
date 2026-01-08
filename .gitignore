@@ -43,3 +43,5 @@ temp_script.py
 .DS_Store
 Thumbs.db
 .vscode
+bin
+.bin

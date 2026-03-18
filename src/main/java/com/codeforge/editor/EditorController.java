@@ -1,13 +1,15 @@
 package com.codeforge.editor;
 
+import com.codeforge.file.FileManager;
 import com.codeforge.runner.PythonRunner;
 import com.codeforge.terminal.TerminalView;
-import com.codeforge.file.FileManager;
 
-import java.io.BufferedReader;
+import javafx.application.Platform;
+
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 public class EditorController {
 
@@ -21,66 +23,63 @@ public class EditorController {
     }
 
     public void runCode() {
-
         if (FileManager.getCurrentFile() == null) {
-            terminal.print("⚠ Please save the file before running\n");
+            terminal.print("Please save the file before running.\n");
             return;
         }
 
         terminal.clear();
-        terminal.print("▶ Running...\n");
+        terminal.print("Running...\n\n");
+        terminal.setInputEnabled(false);
 
         try {
             Process process = PythonRunner.run(editor.getCode());
-
-            inputWriter = new BufferedWriter(
-                    new OutputStreamWriter(process.getOutputStream())
-            );
+            inputWriter = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
 
             terminal.setInputHandler(input -> {
                 try {
-                    if (process.isAlive()) {
-                        inputWriter.write(input);
-                        inputWriter.newLine();
-                        inputWriter.flush();
+                    if (!process.isAlive()) {
+                        terminal.print("[System] Process is no longer running.\n");
+                        terminal.setInputHandler(null);
+                        return;
                     }
+
+                    inputWriter.write(input == null ? "" : input);
+                    inputWriter.newLine();
+                    inputWriter.flush();
+                    terminal.echoInput(input);
                 } catch (Exception ex) {
-                    terminal.print("[System] Input link broken.\n");
+                    terminal.print("[System] Failed to send input: " + ex.getMessage() + "\n");
                 }
             });
 
-            Thread outputThread = new Thread(() -> {
-                try (
-                    BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream())
-                    )
-                ) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        final String out = line;
-                        javafx.application.Platform.runLater(() ->
-                                terminal.print(out + "\n")
-                        );
-                    }
+            Thread ioThread = new Thread(() -> streamProcessOutput(process), "codeforge-terminal-io");
+            ioThread.setDaemon(true);
+            ioThread.start();
+        } catch (Exception ex) {
+            terminal.setInputHandler(null);
+            terminal.print("Failed to run: " + ex.getMessage() + "\n");
+        }
+    }
 
-                    int exitCode = process.waitFor();
-                    javafx.application.Platform.runLater(() ->
-                        terminal.print("\n[Process finished with exit code "
-                                + exitCode + "]\n")
-                    );
+    private void streamProcessOutput(Process process) {
+        try (InputStreamReader reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+            int nextChar;
+            while ((nextChar = reader.read()) != -1) {
+                char output = (char) nextChar;
+                terminal.print(String.valueOf(output));
+            }
 
-                } catch (Exception e) {
-                    javafx.application.Platform.runLater(() ->
-                        terminal.print("Error: " + e.getMessage() + "\n")
-                    );
-                }
+            int exitCode = process.waitFor();
+            Platform.runLater(() -> {
+                terminal.setInputHandler(null);
+                terminal.print("\n[Process finished with exit code " + exitCode + "]\n");
             });
-
-            outputThread.setDaemon(true);
-            outputThread.start();
-
-        } catch (Exception e) {
-            terminal.print("Failed to run: " + e.getMessage() + "\n");
+        } catch (Exception ex) {
+            Platform.runLater(() -> {
+                terminal.setInputHandler(null);
+                terminal.print("\n[Terminal error] " + ex.getMessage() + "\n");
+            });
         }
     }
 }

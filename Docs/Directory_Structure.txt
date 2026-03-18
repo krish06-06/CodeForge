@@ -1,70 +1,67 @@
 CodeForge/
-│
-├── build.gradle
-├── settings.gradle
-├── gradlew
-├── gradlew.bat
-├── gradle/
-│   └── wrapper/
-│
-├── src/
-│   └── main/
-│       ├── java/
-│       │   └── com/
-│       │       └── codeforge/
-│       │           │
-│       │           ├── Launcher.java              
-│       │           ├── MainApp.java               # JavaFX UI
-│       │           │
-│       │           ├── editor/
-│       │           │   ├── CodeEditor.java
-│       │           │   └── EditorController.java
-│       │           │
-│       │           ├── terminal/
-│       │           │   ├── TerminalView.java
-│       │           │   └── TerminalController.java
-│       │           │
-│       │           ├── runner/
-│       │           │   └── PythonRunner.java      # External Python runner
-│       │           │
-│       │           ├── file/
-│       │           │   └── FileManager.java
-│       │           │
-│       │           ├── utils/
-│       │           │   ├── OSUtils.java
-│       │           │   └── ProcessUtils.java
-│       │           │
-│       │           └── compiler/                  
-│       │               ├── CompilerMain.java     # Terminal runner for compiler
-│       │               ├── PythonCompilerRunner.java
-│       │               │
-│       │               ├── token/
-│       │               │   ├── Token.java
-│       │               │   └── TokenType.java
-│       │               │
-│       │               ├── lexer/
-│       │               │   └── Lexer.java
-│       │               │
-│       │               ├── parser/
-│       │               │   └── Parser.java
-│       │               │
-│       │               ├── ast/
-│       │               │   └── Node files(.java)
-│       │               │
-│       │               ├── bytecode/
-│       │               │   ├── OpCode.java
-│       │               │   └── Instruction.java
-│       │               │
-│       │               └── vm/
-│       │                   └── VirtualMachine.java
-│       │
-│       └── resources/
-│           ├── styles/
-│           │   └── theme.css
-│           │
-│           └── icons/
-│               └── codeforge.png
-│
-├── .gitignore
-├── README.md
-└── LICENSE
+|-- build.gradle
+|-- settings.gradle
+|-- README.md
+|-- Docs/
+|   |-- Architecture_Blueprint.md
+|   `-- Directory_Structure.txt
+|-- src/
+|   |-- main/
+|   |   |-- java/
+|   |   |   `-- com/codeforge/
+|   |   |       |-- Launcher.java
+|   |   |       |-- MainApp.java
+|   |   |       |-- editor/
+|   |   |       |   |-- CodeEditor.java
+|   |   |       |   `-- EditorController.java
+|   |   |       |-- file/
+|   |   |       |   |-- FileManager.java
+|   |   |       |   `-- WorkspaceView.java
+|   |   |       |-- terminal/
+|   |   |       |   |-- TerminalController.java
+|   |   |       |   `-- TerminalView.java
+|   |   |       |-- runner/
+|   |   |       |   `-- PythonRunner.java
+|   |   |       |-- compiler/
+|   |   |       |   |-- CompilerMain.java
+|   |   |       |   |-- PythonCompilerRunner.java
+|   |   |       |   |-- ast/
+|   |   |       |   |   |-- Node.java
+|   |   |       |   |   |-- NumberNode.java
+|   |   |       |   |   |-- BinOpNode.java
+|   |   |       |   |   `-- PrintNode.java
+|   |   |       |   |-- lexer/
+|   |   |       |   |   |-- Lexer.java
+|   |   |       |   |   `-- LexerException.java
+|   |   |       |   |-- parser/
+|   |   |       |   |   `-- Parser.java
+|   |   |       |   |-- token/
+|   |   |       |   |   |-- Token.java
+|   |   |       |   |   `-- TokenType.java
+|   |   |       |   |-- semantic/
+|   |   |       |   |   `-- SymbolTable.java
+|   |   |       |   |-- bytecode/
+|   |   |       |   |   |-- Instruction.java
+|   |   |       |   |   `-- OpCode.java
+|   |   |       |   `-- vm/
+|   |   |       |       `-- VirtualMachine.java
+|   |   `-- resources/
+|   |       |-- styles/
+|   |       |   `-- theme.css
+|   |       `-- icons/
+|   |           `-- codeforge.png
+|   `-- test/
+|       `-- java/
+|           `-- com/codeforge/compiler/
+|               |-- lexer/
+|               |   `-- LexerTest.java
+|               `-- parser/
+|                   `-- ParserTest.java
+`-- gradle/
+    `-- wrapper/
+
+Architecture notes:
+- Keep the IDE shell and compiler pipeline decoupled.
+- Treat `compiler/` as a language engine that can run from the terminal, tests, or the IDE.
+- Add `semantic/` next, before expanding the VM, so name binding and diagnostics have a dedicated home.
+- Move tests under `src/test/java` as the compiler surface grows.

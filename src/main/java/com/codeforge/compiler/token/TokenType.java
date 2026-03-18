@@ -1,14 +1,38 @@
 package com.codeforge.compiler.token;
 
 public enum TokenType {
+    NEWLINE,
+    INDENT,
+    DEDENT,
+
     NUMBER,
+    STRING,
     PLUS,
     MINUS,
     STAR,
     SLASH,
+    PERCENT,
+    EQUAL,
+    DOUBLE_EQUAL,
+    NOT_EQUAL,
+    LESS,
+    LESS_EQUAL,
+    GREATER,
+    GREATER_EQUAL,
     LPAREN,
     RPAREN,
+    COLON,
+    COMMA,
     PRINT,
+    IF,
+    ELIF,
+    ELSE,
+    WHILE,
+    DEF,
+    RETURN,
+    TRUE,
+    FALSE,
+    NONE,
     IDENTIFIER,
     EOF
 }

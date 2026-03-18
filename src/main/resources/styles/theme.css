@@ -1,0 +1,213 @@
+.root {
+    -fx-base: #11161d;
+    -fx-background: #11161d;
+    -fx-control-inner-background: #171d25;
+    -fx-accent: #4cc2ff;
+    -fx-focus-color: #4cc2ff;
+    -fx-faint-focus-color: rgba(76, 194, 255, 0.16);
+    -fx-font-family: "Segoe UI";
+    -fx-text-fill: #e6edf7;
+}
+
+.app-shell {
+    -fx-background-color:
+        linear-gradient(from 0% 0% to 100% 100%, #0d1319 0%, #121922 42%, #0f151d 100%);
+}
+
+.toolbar {
+    -fx-background-color: #161d26;
+    -fx-border-color: transparent transparent #202a35 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.status-bar {
+    -fx-background-color: #161d26;
+    -fx-border-color: #202a35 transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+.status-text {
+    -fx-text-fill: #93a4b7;
+    -fx-font-size: 11px;
+}
+
+.panel {
+    -fx-background-color: #121922;
+    -fx-border-color: #202a35;
+    -fx-border-width: 1px;
+}
+
+.section-header {
+    -fx-background-color: #161f29;
+    -fx-border-color: transparent transparent #202a35 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.section-label {
+    -fx-text-fill: #d6dee8;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-letter-spacing: 0.6px;
+}
+
+.button {
+    -fx-background-color: #202a35;
+    -fx-text-fill: #e6edf7;
+    -fx-background-radius: 8px;
+    -fx-padding: 8 14 8 14;
+    -fx-font-weight: 600;
+}
+
+.button:hover {
+    -fx-background-color: #263240;
+}
+
+.button.accent-button {
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #2f7cff 0%, #26b0ff 100%);
+    -fx-text-fill: white;
+}
+
+.button.accent-button:hover {
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #468bff 0%, #3fc0ff 100%);
+}
+
+.tab-pane {
+    -fx-background-color: #121922;
+}
+
+.tab-pane .tab-header-area {
+    -fx-background-color: #131a22;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #1a2330;
+    -fx-background-insets: 0;
+    -fx-padding: 8 16 8 16;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #1f2b39;
+}
+
+.tab-pane .tab-label {
+    -fx-text-fill: #d6dee8;
+    -fx-font-weight: 600;
+}
+
+.tree-view,
+.text-field,
+.text-area,
+.code-area {
+    -fx-background-color: #121922;
+    -fx-text-fill: #e6edf7;
+}
+
+.tree-view {
+    -fx-cell-hover-color: #1d2734;
+    -fx-padding: 8;
+}
+
+.tree-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #b6c3d1;
+    -fx-padding: 6 8 6 8;
+}
+
+.tree-cell:selected {
+    -fx-background-color: #213041;
+    -fx-background-radius: 6px;
+    -fx-text-fill: #f3f8ff;
+}
+
+.text-field,
+.text-area {
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: #202a35;
+    -fx-border-width: 1 0 0 0;
+    -fx-font-family: "Consolas";
+}
+
+.editor-shell {
+    -fx-background-color: #0f151d;
+}
+
+.code-area {
+    -fx-font-family: "JetBrains Mono", "Consolas";
+    -fx-font-size: 14px;
+    -fx-fill: #f5f7fb;
+    -fx-highlight-fill: #1e3550;
+    -fx-highlight-text-fill: #f8fbff;
+}
+
+.plain-text {
+    -fx-fill: #f5f7fb;
+}
+
+.code-area .paragraph-box:has-caret {
+    -fx-background-color: rgba(255, 255, 255, 0.02);
+}
+
+.lineno {
+    -fx-background-color: #101720;
+    -fx-text-fill: #5f7388;
+    -fx-padding: 0 12 0 10;
+}
+
+.token-keyword {
+    -fx-fill: #61d6ff;
+    -fx-font-weight: 700;
+}
+
+.token-string {
+    -fx-fill: #f7bf66;
+}
+
+.token-comment {
+    -fx-fill: #6b7d90;
+    -fx-font-style: italic;
+}
+
+.token-number {
+    -fx-fill: #8dd36f;
+}
+
+.token-operator,
+.token-paren,
+.token-brace,
+.token-bracket,
+.token-semicolon {
+    -fx-fill: #f08282;
+}
+
+.split-pane {
+    -fx-background-color: transparent;
+}
+
+.split-pane-divider {
+    -fx-background-color: #202a35;
+    -fx-padding: 0 1 0 1;
+}
+
+.terminal-shell {
+    -fx-background-color: #121922;
+}
+
+.terminal-output {
+    -fx-highlight-fill: #243e5c;
+    -fx-highlight-text-fill: #f8fbff;
+}
+
+.terminal-output .content,
+.terminal-input {
+    -fx-background-color: #0f151d;
+    -fx-text-fill: #f5f7fb;
+    -fx-prompt-text-fill: #6d8196;
+    -fx-border-color: #202a35;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.terminal-send {
+    -fx-min-width: 84px;
+}

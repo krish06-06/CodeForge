@@ -11,6 +11,7 @@ import org.fxmisc.richtext.model.StyleSpansBuilder;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +45,7 @@ public class CodeEditor {
     private final CodeArea codeArea;
     private final BorderPane root;
     private boolean dirty;
+    private Consumer<Boolean> dirtyChangeListener;
 
     public CodeEditor() {
         codeArea = new CodeArea();
@@ -56,7 +58,7 @@ public class CodeEditor {
             .successionEnds(Duration.ofMillis(80))
             .subscribe(ignore -> codeArea.setStyleSpans(0, computeHighlighting(codeArea.getText())));
 
-        codeArea.textProperty().addListener((obs, oldText, newText) -> dirty = true);
+        codeArea.textProperty().addListener((obs, oldText, newText) -> setDirty(true));
 
         root = new BorderPane(codeArea);
         root.getStyleClass().add("editor-shell");
@@ -73,7 +75,7 @@ public class CodeEditor {
     public void setCode(String code) {
         codeArea.replaceText(code == null ? "" : code);
         codeArea.setStyleSpans(0, computeHighlighting(codeArea.getText()));
-        dirty = false;
+        setDirty(false);
     }
 
     public boolean isDirty() {
@@ -81,10 +83,20 @@ public class CodeEditor {
     }
 
     public void markSaved() {
-        dirty = false;
+        setDirty(false);
+    }
+
+    public void setDirtyChangeListener(Consumer<Boolean> listener) {
+        this.dirtyChangeListener = listener;
     }
 
     private StyleSpans<Collection<String>> computeHighlighting(String text) {
+        if (text.isEmpty()) {
+            StyleSpansBuilder<Collection<String>> emptyBuilder = new StyleSpansBuilder<>();
+            emptyBuilder.add(Collections.emptyList(), 0);
+            return emptyBuilder.create();
+        }
+
         Matcher matcher = PATTERN.matcher(text);
         int lastMatchEnd = 0;
         StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
@@ -113,5 +125,12 @@ public class CodeEditor {
             spansBuilder.add(Collections.singleton("plain-text"), text.length() - lastMatchEnd);
         }
         return spansBuilder.create();
+    }
+
+    private void setDirty(boolean dirty) {
+        this.dirty = dirty;
+        if (dirtyChangeListener != null) {
+            dirtyChangeListener.accept(dirty);
+        }
     }
 }

@@ -1,35 +1,25 @@
 package com.codeforge.runner;
 
-import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import com.codeforge.file.FileManager;
+public final class PythonRunner {
 
-public class PythonRunner {
+    private PythonRunner() {
+    }
 
-    public static Process run(String code) throws Exception {
+    public static Process run(Path filePath, String code) throws Exception {
+        Path fileToRun = filePath;
 
-        Path fileToRun;
-
-        // If user opened/saved a file → run it
-        if (FileManager.getCurrentFile() != null) {
-            fileToRun = FileManager.getCurrentFile();
-
-            // Ensure latest code is saved before running
+        if (fileToRun != null) {
             Files.writeString(fileToRun, code);
-        }
-        // Else → fallback to temp file (unsaved code)
-        else {
+        } else {
             fileToRun = Files.createTempFile("codeforge_", ".py");
             Files.writeString(fileToRun, code);
             fileToRun.toFile().deleteOnExit();
         }
 
-        ProcessBuilder builder = new ProcessBuilder(
-                "python", fileToRun.toAbsolutePath().toString()
-        );
-
+        ProcessBuilder builder = new ProcessBuilder("python", fileToRun.toAbsolutePath().toString());
         builder.redirectErrorStream(true);
         return builder.start();
     }

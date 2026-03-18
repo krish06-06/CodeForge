@@ -193,6 +193,17 @@
     -fx-background-color: #121922;
 }
 
+.terminal-manager,
+.terminal-toolbar {
+    -fx-background-color: #121922;
+}
+
+.terminal-add-button {
+    -fx-background-radius: 999px;
+    -fx-padding: 4 10 4 10;
+    -fx-font-size: 16px;
+}
+
 .terminal-output {
     -fx-highlight-fill: #243e5c;
     -fx-highlight-text-fill: #f8fbff;

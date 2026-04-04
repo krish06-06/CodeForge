@@ -1,10 +1,11 @@
-package com.codeforge.compiler.lexer;
+package com.codeforge.compiler.parser;
 
-public class LexerException extends RuntimeException {
+public class ParserException extends RuntimeException {
+
     private final int line;
     private final int column;
 
-    public LexerException(String message, int line, int column) {
+    public ParserException(String message, int line, int column) {
         super(message);
         this.line = line;
         this.column = column;

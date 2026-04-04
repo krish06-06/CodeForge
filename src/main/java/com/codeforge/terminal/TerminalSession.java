@@ -15,6 +15,8 @@ public class TerminalSession {
     private final String name;
     private BufferedWriter inputWriter;
     private Process process;
+    private StringBuilder transcript = new StringBuilder();
+    private TerminalSessionListener listener;
 
     public TerminalSession(String name) {
         this.name = name;
@@ -35,13 +37,19 @@ public class TerminalSession {
         return name;
     }
 
-    public void attachProcess(Process process, String header) {
+    public void attachProcess(Process process, String header, TerminalSessionListener listener) {
+        stopProcess();
         this.process = process;
+        this.listener = listener;
+        this.transcript = new StringBuilder();
         this.inputWriter = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
 
         view.clear();
         view.print(header + "\n\n");
         view.setInputHandler(this::sendInput);
+        if (listener != null) {
+            listener.onStarted(this);
+        }
 
         Thread ioThread = new Thread(this::streamOutput, name + "-io");
         ioThread.setDaemon(true);
@@ -50,6 +58,15 @@ public class TerminalSession {
 
     public void print(String text) {
         view.print(text);
+    }
+
+    public boolean isRunning() {
+        return process != null && process.isAlive();
+    }
+
+    public void dispose() {
+        stopProcess();
+        view.setInputHandler(null);
     }
 
     private void sendInput(String input) {
@@ -71,21 +88,45 @@ public class TerminalSession {
 
     private void streamOutput() {
         try (InputStreamReader reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
-            int nextChar;
-            while ((nextChar = reader.read()) != -1) {
-                view.print(String.valueOf((char) nextChar));
+            char[] buffer = new char[256];
+            int readCount;
+            while ((readCount = reader.read(buffer)) != -1) {
+                String chunk = new String(buffer, 0, readCount);
+                transcript.append(chunk);
+                view.print(chunk);
+                if (listener != null) {
+                    listener.onOutput(this, chunk, transcript.toString());
+                }
             }
 
             int exitCode = process.waitFor();
             Platform.runLater(() -> {
                 view.setInputHandler(null);
                 view.print("\n[Process finished with exit code " + exitCode + "]\n");
+                if (listener != null) {
+                    listener.onFinished(this, exitCode, transcript.toString());
+                }
             });
         } catch (Exception ex) {
             Platform.runLater(() -> {
                 view.setInputHandler(null);
                 view.print("\n[Terminal error] " + ex.getMessage() + "\n");
+                if (listener != null) {
+                    listener.onError(this, transcript.toString(), ex.getMessage());
+                }
             });
+        }
+    }
+
+    private void stopProcess() {
+        if (process != null && process.isAlive()) {
+            process.destroy();
+            try {
+                process.waitFor();
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
         }
     }
 }

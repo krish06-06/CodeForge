@@ -45,3 +45,6 @@ Thumbs.db
 .vscode
 bin
 .bin
+.gradle-user/
+
+.env

@@ -1,7 +1,7 @@
 CodeForge/
 |-- build.gradle
 |-- settings.gradle
-|-- README.md
+|-- gradle.properties
 |-- Docs/
 |   |-- Architecture_Blueprint.md
 |   `-- Directory_Structure.txt
@@ -11,45 +11,58 @@ CodeForge/
 |   |   |   `-- com/codeforge/
 |   |   |       |-- Launcher.java
 |   |   |       |-- MainApp.java
+|   |   |       |-- WorkbenchController.java
 |   |   |       |-- editor/
 |   |   |       |   |-- CodeEditor.java
-|   |   |       |   `-- EditorController.java
+|   |   |       |   |-- EditorController.java
+|   |   |       |   |-- EditorTabManager.java
+|   |   |       |   `-- EditorTabSession.java
 |   |   |       |-- file/
 |   |   |       |   |-- FileManager.java
 |   |   |       |   `-- WorkspaceView.java
 |   |   |       |-- terminal/
-|   |   |       |   |-- TerminalController.java
+|   |   |       |   |-- TerminalManager.java
+|   |   |       |   |-- TerminalSession.java
 |   |   |       |   `-- TerminalView.java
+|   |   |       |-- problems/
+|   |   |       |   `-- ProblemsView.java
+|   |   |       |-- language/
+|   |   |       |   |-- Diagnostic.java
+|   |   |       |   |-- DiagnosticSeverity.java
+|   |   |       |   `-- LanguageService.java
 |   |   |       |-- runner/
 |   |   |       |   `-- PythonRunner.java
-|   |   |       |-- compiler/
-|   |   |       |   |-- CompilerMain.java
-|   |   |       |   |-- PythonCompilerRunner.java
-|   |   |       |   |-- ast/
-|   |   |       |   |   |-- Node.java
-|   |   |       |   |   |-- NumberNode.java
-|   |   |       |   |   |-- BinOpNode.java
-|   |   |       |   |   `-- PrintNode.java
-|   |   |       |   |-- lexer/
-|   |   |       |   |   |-- Lexer.java
-|   |   |       |   |   `-- LexerException.java
-|   |   |       |   |-- parser/
-|   |   |       |   |   `-- Parser.java
-|   |   |       |   |-- token/
-|   |   |       |   |   |-- Token.java
-|   |   |       |   |   `-- TokenType.java
-|   |   |       |   |-- semantic/
-|   |   |       |   |   `-- SymbolTable.java
-|   |   |       |   |-- bytecode/
-|   |   |       |   |   |-- Instruction.java
-|   |   |       |   |   `-- OpCode.java
-|   |   |       |   `-- vm/
-|   |   |       |       `-- VirtualMachine.java
+|   |   |       `-- compiler/
+|   |   |           |-- CompilerMain.java
+|   |   |           |-- PythonCompilerRunner.java
+|   |   |           |-- ast/
+|   |   |           |   |-- Node.java
+|   |   |           |   |-- ProgramNode.java
+|   |   |           |   |-- AssignmentNode.java
+|   |   |           |   |-- VariableNode.java
+|   |   |           |   |-- NumberNode.java
+|   |   |           |   |-- StringNode.java
+|   |   |           |   |-- UnaryOpNode.java
+|   |   |           |   |-- BinOpNode.java
+|   |   |           |   |-- PrintNode.java
+|   |   |           |   `-- ExpressionStatementNode.java
+|   |   |           |-- lexer/
+|   |   |           |   |-- Lexer.java
+|   |   |           |   `-- LexerException.java
+|   |   |           |-- parser/
+|   |   |           |   |-- Parser.java
+|   |   |           |   `-- ParserException.java
+|   |   |           |-- token/
+|   |   |           |   |-- Token.java
+|   |   |           |   `-- TokenType.java
+|   |   |           |-- bytecode/
+|   |   |           |   |-- Instruction.java
+|   |   |           |   `-- OpCode.java
+|   |   |           `-- vm/
+|   |   |               `-- VirtualMachine.java
 |   |   `-- resources/
-|   |       |-- styles/
-|   |       |   `-- theme.css
-|   |       `-- icons/
-|   |           `-- codeforge.png
+|   |       `-- styles/
+|   |           `-- theme.css
 |   `-- test/
 |       `-- java/
 |           `-- com/codeforge/compiler/
@@ -60,8 +73,8 @@ CodeForge/
 `-- gradle/
     `-- wrapper/
 
-Architecture notes:
-- Keep the IDE shell and compiler pipeline decoupled.
-- Treat `compiler/` as a language engine that can run from the terminal, tests, or the IDE.
-- Add `semantic/` next, before expanding the VM, so name binding and diagnostics have a dedicated home.
-- Move tests under `src/test/java` as the compiler surface grows.
+Current architecture notes:
+- `WorkbenchController` is the orchestration layer for file, editor, terminal, and problems state.
+- `LanguageService` is the current validation/execution facade and is the future insertion point for the custom Python engine.
+- `WorkspaceView` now lazy-loads directory nodes and delegates file actions upward instead of directly owning IDE state.
+- `EditorTabManager` and `TerminalManager` now represent multi-session state rather than one global editor/terminal.

@@ -1,10 +1,9 @@
 package com.codeforge.file;
 
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
+import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
@@ -13,22 +12,21 @@ import javafx.scene.input.MouseButton;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Optional;
+import java.util.List;
 
 public class WorkspaceView {
 
     public interface WorkspaceListener {
         void onOpenFile(Path path);
-        void onPathRenamed(Path oldPath, Path newPath);
-        void onPathDeleted(Path path);
-        void onMessage(String message);
+        void onRenameRequested(Path path);
+        void onDeleteRequested(Path path);
+        void onCopyRequested(Path path);
+        void onPasteRequested(Path path);
     }
 
     private final TreeView<Path> treeView;
     private Path rootPath;
-    private Path clipboardPath;
     private WorkspaceListener listener;
 
     public WorkspaceView() {
@@ -39,18 +37,14 @@ public class WorkspaceView {
 
     public void openFolder(Path folder) {
         rootPath = folder;
-        refresh();
+        treeView.setRoot(folder == null ? null : new PathTreeItem(folder));
+        if (treeView.getRoot() != null) {
+            treeView.getRoot().setExpanded(true);
+        }
     }
 
     public void refresh() {
-        if (rootPath == null) {
-            treeView.setRoot(null);
-            return;
-        }
-
-        TreeItem<Path> rootItem = createNode(rootPath);
-        rootItem.setExpanded(true);
-        treeView.setRoot(rootItem);
+        openFolder(rootPath);
     }
 
     public TreeView<Path> getView() {
@@ -59,6 +53,10 @@ public class WorkspaceView {
 
     public void setListener(WorkspaceListener listener) {
         this.listener = listener;
+    }
+
+    public Path getRootPath() {
+        return rootPath;
     }
 
     private TreeCell<Path> createCell() {
@@ -92,115 +90,98 @@ public class WorkspaceView {
 
     private ContextMenu createContextMenu(Path path) {
         MenuItem rename = new MenuItem("Rename");
-        rename.setOnAction(event -> renamePath(path));
+        rename.setOnAction(event -> {
+            if (listener != null) {
+                listener.onRenameRequested(path);
+            }
+        });
 
         MenuItem delete = new MenuItem("Delete");
-        delete.setOnAction(event -> deletePath(path));
+        delete.setOnAction(event -> {
+            if (listener != null) {
+                listener.onDeleteRequested(path);
+            }
+        });
 
         MenuItem copy = new MenuItem("Copy");
         copy.setOnAction(event -> {
-            clipboardPath = path;
-            notifyMessage("Copied " + path.getFileName());
+            if (listener != null) {
+                listener.onCopyRequested(path);
+            }
         });
 
         MenuItem paste = new MenuItem("Paste");
-        paste.setOnAction(event -> pasteInto(path));
-
-        ContextMenu menu = new ContextMenu(rename, delete, copy, paste);
-        menu.setOnShowing(event -> paste.setDisable(clipboardPath == null));
-        return menu;
-    }
-
-    private void renamePath(Path source) {
-        TextInputDialog dialog = new TextInputDialog(source.getFileName().toString());
-        dialog.setTitle("Rename");
-        dialog.setHeaderText("Rename " + source.getFileName());
-        dialog.setContentText("New name:");
-
-        Optional<String> result = dialog.showAndWait();
-        if (result.isEmpty()) {
-            return;
-        }
-
-        String newName = result.get().trim();
-        if (newName.isEmpty() || newName.equals(source.getFileName().toString())) {
-            return;
-        }
-
-        try {
-            Path renamed = FileManager.rename(source, newName);
-            refresh();
+        paste.setOnAction(event -> {
             if (listener != null) {
-                listener.onPathRenamed(source, renamed);
+                listener.onPasteRequested(path);
             }
-            notifyMessage("Renamed to " + renamed.getFileName());
-        } catch (Exception ex) {
-            notifyMessage("Rename failed: " + ex.getMessage());
-        }
+        });
+
+        return new ContextMenu(rename, delete, copy, paste);
     }
 
-    private void deletePath(Path source) {
-        Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
-        confirmation.setTitle("Delete");
-        confirmation.setHeaderText("Delete " + source.getFileName() + "?");
-        confirmation.setContentText("This action cannot be undone.");
+    private final class PathTreeItem extends TreeItem<Path> {
+        private boolean childrenLoaded;
+        private boolean loading;
 
-        Optional<ButtonType> choice = confirmation.showAndWait();
-        if (choice.isEmpty() || choice.get() != ButtonType.OK) {
-            return;
-        }
-
-        try {
-            FileManager.delete(source);
-            refresh();
-            if (listener != null) {
-                listener.onPathDeleted(source);
+        private PathTreeItem(Path path) {
+            super(path);
+            if (Files.isDirectory(path)) {
+                getChildren().add(new TreeItem<>());
+                expandedProperty().addListener((obs, wasExpanded, isExpanded) -> {
+                    if (isExpanded) {
+                        loadChildrenAsync();
+                    }
+                });
             }
-            notifyMessage("Deleted " + source.getFileName());
-        } catch (Exception ex) {
-            notifyMessage("Delete failed: " + ex.getMessage());
-        }
-    }
-
-    private void pasteInto(Path target) {
-        if (clipboardPath == null) {
-            return;
         }
 
-        Path destinationDirectory = Files.isDirectory(target) ? target : target.getParent();
-        try {
-            Path pasted = FileManager.copy(clipboardPath, destinationDirectory);
-            refresh();
-            notifyMessage("Pasted " + pasted.getFileName());
-        } catch (Exception ex) {
-            notifyMessage("Paste failed: " + ex.getMessage());
+        @Override
+        public boolean isLeaf() {
+            return !Files.isDirectory(getValue());
         }
-    }
 
-    private TreeItem<Path> createNode(Path path) {
-        TreeItem<Path> item = new TreeItem<>(path);
+        private void loadChildrenAsync() {
+            if (childrenLoaded || loading || isLeaf()) {
+                return;
+            }
 
-        if (Files.isDirectory(path)) {
-            try (var stream = Files.list(path)) {
-                Path[] children = stream.toArray(Path[]::new);
-                Arrays.sort(children, Comparator
-                    .comparing((Path candidate) -> Files.isRegularFile(candidate))
-                    .thenComparing(candidate -> candidate.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
-
-                for (Path child : children) {
-                    item.getChildren().add(createNode(child));
+            loading = true;
+            Task<List<PathTreeItem>> loadTask = new Task<>() {
+                @Override
+                protected List<PathTreeItem> call() throws Exception {
+                    try (var stream = Files.list(PathTreeItem.this.getValue())) {
+                        return stream
+                            .sorted(Comparator
+                                .comparing((Path candidate) -> Files.isRegularFile(candidate))
+                                .thenComparing(candidate -> candidate.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
+                            .map(PathTreeItem::new)
+                            .toList();
+                    }
                 }
-            } catch (IOException ex) {
-                notifyMessage("Failed to read folder: " + ex.getMessage());
-            }
+            };
+
+            loadTask.setOnSucceeded(event -> {
+                childrenLoaded = true;
+                loading = false;
+                Platform.runLater(() -> getChildren().setAll(loadTask.getValue()));
+            });
+
+            loadTask.setOnFailed(event -> {
+                childrenLoaded = true;
+                loading = false;
+                Platform.runLater(this::clearPlaceholder);
+            });
+
+            Thread loader = new Thread(loadTask, "workspace-loader-" + getValue().getFileName());
+            loader.setDaemon(true);
+            loader.start();
         }
 
-        return item;
-    }
-
-    private void notifyMessage(String message) {
-        if (listener != null) {
-            listener.onMessage(message);
+        private void clearPlaceholder() {
+            if (!getChildren().isEmpty() && getChildren().get(0).getValue() == null) {
+                getChildren().clear();
+            }
         }
     }
 }

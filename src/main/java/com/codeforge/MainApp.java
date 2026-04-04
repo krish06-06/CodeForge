@@ -1,125 +1,50 @@
 package com.codeforge;
 
-import com.codeforge.editor.EditorController;
-import com.codeforge.editor.EditorTabManager;
-import com.codeforge.editor.EditorTabSession;
-import com.codeforge.file.FileManager;
-import com.codeforge.file.WorkspaceView;
-import com.codeforge.terminal.TerminalManager;
+import com.codeforge.config.ConfigManager;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
-import javafx.stage.DirectoryChooser;
+import javafx.scene.layout.Priority;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
-
-import java.nio.file.Path;
 
 public class MainApp extends Application {
 
+    private boolean adjustingStageBounds;
+
     @Override
     public void start(Stage stage) {
-        EditorTabManager editorTabs = new EditorTabManager();
-        TerminalManager terminalManager = new TerminalManager();
-        WorkspaceView workspace = new WorkspaceView();
-        EditorController controller = new EditorController(editorTabs, terminalManager);
+        WorkbenchController workbench = new WorkbenchController(stage);
 
-        Label statusLabel = new Label("Ready");
-        statusLabel.getStyleClass().add("status-text");
+        Button newFileButton = createToolbarButton("＋", "New File", false);
+        newFileButton.setOnAction(event -> workbench.newFile());
 
-        workspace.setListener(new WorkspaceView.WorkspaceListener() {
-            @Override
-            public void onOpenFile(Path path) {
-                openFile(path, editorTabs, statusLabel, terminalManager);
-            }
+        Button openFileButton = createToolbarButton("⌂", "Open File", false);
+        openFileButton.setOnAction(event -> workbench.openFileChooser());
 
-            @Override
-            public void onPathRenamed(Path oldPath, Path newPath) {
-                editorTabs.renamePath(oldPath, newPath);
-                statusLabel.setText("Renamed " + oldPath.getFileName() + " to " + newPath.getFileName());
-            }
+        Button openFolderButton = createToolbarButton("▣", "Open Folder", false);
+        openFolderButton.setOnAction(event -> workbench.openFolderChooser());
 
-            @Override
-            public void onPathDeleted(Path path) {
-                editorTabs.closeSessionsInside(path);
-                statusLabel.setText("Deleted " + path.getFileName());
-            }
+        Button saveButton = createToolbarButton("⇣", "Save", false);
+        saveButton.setOnAction(event -> workbench.saveActive());
 
-            @Override
-            public void onMessage(String message) {
-                statusLabel.setText(message);
-                if (terminalManager.getActiveSession() != null) {
-                    terminalManager.getActiveSession().print(message + "\n");
-                }
-            }
-        });
+        Button runButton = createToolbarButton("▶", "Run", true);
+        runButton.setOnAction(event -> workbench.runActive());
 
-        editorTabs.setActiveSessionListener(session -> {
-            if (session == null) {
-                statusLabel.setText("No active file");
-            } else if (session.getFilePath() != null) {
-                statusLabel.setText("Active file: " + session.getFilePath());
-            } else {
-                statusLabel.setText("Active file: " + session.getDisplayName());
-            }
-        });
-
-        Button newFileButton = new Button("New File");
-        newFileButton.setOnAction(event -> {
-            EditorTabSession session = editorTabs.openUntitled();
-            statusLabel.setText("Created " + session.getDisplayName());
-        });
-
-        Button openFileButton = new Button("Open File");
-        openFileButton.setOnAction(event -> {
-            Path path = FileManager.chooseFile(stage);
-            if (path != null) {
-                openFile(path, editorTabs, statusLabel, terminalManager);
-            }
-        });
-
-        Button openFolderButton = new Button("Open Folder");
-        openFolderButton.setOnAction(event -> {
-            DirectoryChooser chooser = new DirectoryChooser();
-            var folder = chooser.showDialog(stage);
-            if (folder != null) {
-                workspace.openFolder(folder.toPath());
-                statusLabel.setText("Workspace " + folder.getAbsolutePath());
-            }
-        });
-
-        Button saveButton = new Button("Save");
-        saveButton.setOnAction(event -> {
-            try {
-                editorTabs.saveActive(stage);
-                statusLabel.setText("Saved " + editorTabs.getActiveSession().getDisplayName());
-            } catch (Exception ex) {
-                statusLabel.setText("Save failed");
-                if (terminalManager.getActiveSession() != null) {
-                    terminalManager.getActiveSession().print("Save failed: " + ex.getMessage() + "\n");
-                }
-            }
-        });
-
-        Button newTerminalButton = new Button("New Terminal");
-        newTerminalButton.setOnAction(event -> {
-            var session = terminalManager.createTerminal();
-            statusLabel.setText("Opened " + session.getName());
-        });
-
-        Button runButton = new Button("Run");
-        runButton.getStyleClass().add("accent-button");
-        runButton.setOnAction(event -> {
-            controller.runActiveFile();
-            EditorTabSession active = editorTabs.getActiveSession();
-            statusLabel.setText(active == null ? "Run requested" : "Running " + active.getDisplayName());
-        });
+        Button newTerminalButton = createToolbarButton("⌘", "New Terminal", false);
+        newTerminalButton.setOnAction(event -> workbench.newTerminal());
 
         HBox toolbar = new HBox(
             10,
@@ -135,24 +60,38 @@ public class MainApp extends Application {
         toolbar.setPadding(new Insets(10, 12, 10, 12));
         toolbar.getStyleClass().add("toolbar");
 
-        BorderPane explorerPane = new BorderPane(workspace.getView());
+        BorderPane explorerPane = new BorderPane(workbench.getWorkspaceView().getView());
         explorerPane.getStyleClass().add("panel");
         explorerPane.setTop(sectionLabel("Explorer"));
 
-        BorderPane terminalPane = new BorderPane(terminalManager.getView());
-        terminalPane.getStyleClass().add("panel");
-        terminalPane.setTop(sectionLabel("Terminals"));
+        TabPane bottomTabs = new TabPane();
+        bottomTabs.getStyleClass().add("bottom-tabs");
+        Tab terminalsTab = new Tab("Terminals", workbench.getTerminalManager().getView());
+        terminalsTab.setClosable(false);
+        Tab problemsTab = new Tab("Problems", workbench.getProblemsView().getView());
+        problemsTab.setClosable(false);
+        Tab snapshotTab = new Tab("AI Snapshot", workbench.getAiSnapshotView().getView());
+        snapshotTab.setClosable(false);
+        bottomTabs.getTabs().addAll(terminalsTab, problemsTab, snapshotTab);
 
-        SplitPane editorTerminalSplit = new SplitPane(editorTabs.getView(), terminalPane);
-        editorTerminalSplit.setOrientation(javafx.geometry.Orientation.VERTICAL);
-        editorTerminalSplit.setDividerPositions(0.7);
+        BorderPane bottomPane = new BorderPane(bottomTabs);
+        bottomPane.getStyleClass().add("panel");
 
-        SplitPane mainSplit = new SplitPane(explorerPane, editorTerminalSplit);
+        SplitPane editorBottomSplit = new SplitPane(workbench.getEditorTabs().getView(), bottomPane);
+        editorBottomSplit.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        editorBottomSplit.setDividerPositions(0.7);
+
+        SplitPane mainSplit = new SplitPane(explorerPane, editorBottomSplit);
         mainSplit.setDividerPositions(0.23);
 
-        HBox statusBar = new HBox(statusLabel);
+        HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(6, 12, 6, 12));
         statusBar.getStyleClass().add("status-bar");
+        var statusLabel = new javafx.scene.control.Label();
+        statusLabel.getStyleClass().add("status-text");
+        statusLabel.textProperty().bind(workbench.statusProperty());
+        HBox.setHgrow(statusLabel, Priority.ALWAYS);
+        statusBar.getChildren().add(statusLabel);
 
         BorderPane root = new BorderPane();
         root.getStyleClass().add("app-shell");
@@ -160,28 +99,27 @@ public class MainApp extends Application {
         root.setCenter(mainSplit);
         root.setBottom(statusBar);
 
-        Scene scene = new Scene(root, 1440, 900);
+        Rectangle2D visualBounds = Screen.getPrimary().getVisualBounds();
+        double sceneWidth = Math.min(1480, Math.max(1100, visualBounds.getWidth() - 80));
+        double sceneHeight = Math.min(920, Math.max(760, visualBounds.getHeight() - 80));
+
+        Scene scene = new Scene(root, sceneWidth, sceneHeight);
         scene.getStylesheets().add(getClass().getResource("/styles/theme.css").toExternalForm());
 
         stage.setTitle("CodeForge");
+        stage.setMinWidth(1100);
+        stage.setMinHeight(760);
         stage.setScene(scene);
         stage.show();
-    }
-
-    private void openFile(Path path, EditorTabManager editorTabs, Label statusLabel, TerminalManager terminalManager) {
-        try {
-            editorTabs.openFile(path);
-            statusLabel.setText("Opened " + path);
-        } catch (Exception ex) {
-            statusLabel.setText("Open failed");
-            if (terminalManager.getActiveSession() != null) {
-                terminalManager.getActiveSession().print("Open failed: " + ex.getMessage() + "\n");
-            }
-        }
+        Platform.runLater(() -> positionStageSafely(stage));
+        stage.xProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
+        stage.yProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
+        stage.widthProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
+        stage.heightProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
     }
 
     private HBox sectionLabel(String title) {
-        Label label = new Label(title);
+        var label = new javafx.scene.control.Label(title);
         label.getStyleClass().add("section-label");
 
         HBox container = new HBox(label);
@@ -191,6 +129,77 @@ public class MainApp extends Application {
     }
 
     public static void main(String[] args) {
+        ConfigManager.load();
         launch();
+    }
+
+    private Button createToolbarButton(String icon, String text, boolean accent) {
+        Label iconLabel = new Label(icon);
+        iconLabel.getStyleClass().add("toolbar-icon");
+
+        Label textLabel = new Label(text);
+        textLabel.getStyleClass().add("toolbar-button-label");
+
+        HBox content = new HBox(8, iconLabel, textLabel);
+        Button button = new Button();
+        button.setGraphic(content);
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.getStyleClass().add("toolbar-button");
+        if (accent) {
+            button.getStyleClass().add("accent-button");
+        }
+        return button;
+    }
+
+    private void positionStageSafely(Stage stage) {
+        Rectangle2D bounds = findBestScreenBounds(stage);
+        double horizontalMargin = 24;
+        double topMargin = 24;
+        double bottomMargin = 24;
+
+        double width = Math.min(stage.getWidth(), bounds.getWidth() - (horizontalMargin * 2));
+        double height = Math.min(stage.getHeight(), bounds.getHeight() - topMargin - bottomMargin);
+        double x = Math.max(bounds.getMinX() + horizontalMargin, bounds.getMinX() + ((bounds.getWidth() - width) / 2));
+        double y = Math.max(bounds.getMinY() + topMargin, bounds.getMinY() + ((bounds.getHeight() - height) / 2));
+
+        adjustingStageBounds = true;
+        stage.setWidth(width);
+        stage.setHeight(height);
+        stage.setX(x);
+        stage.setY(y);
+        adjustingStageBounds = false;
+    }
+
+    private void keepStageWithinVisibleBounds(Stage stage) {
+        if (adjustingStageBounds) {
+            return;
+        }
+
+        Rectangle2D bounds = findBestScreenBounds(stage);
+        double horizontalMargin = 8;
+        double topMargin = 8;
+        double bottomMargin = 8;
+
+        double width = Math.min(stage.getWidth(), bounds.getWidth() - (horizontalMargin * 2));
+        double height = Math.min(stage.getHeight(), bounds.getHeight() - topMargin - bottomMargin);
+        double x = Math.max(bounds.getMinX() + horizontalMargin, Math.min(stage.getX(), bounds.getMaxX() - width - horizontalMargin));
+        double y = Math.max(bounds.getMinY() + topMargin, Math.min(stage.getY(), bounds.getMaxY() - height - bottomMargin));
+
+        adjustingStageBounds = true;
+        stage.setWidth(width);
+        stage.setHeight(height);
+        stage.setX(x);
+        stage.setY(y);
+        adjustingStageBounds = false;
+    }
+
+    private Rectangle2D findBestScreenBounds(Stage stage) {
+        double width = Math.max(stage.getWidth(), 1);
+        double height = Math.max(stage.getHeight(), 1);
+        return Screen.getScreensForRectangle(stage.getX(), stage.getY(), width, height)
+            .stream()
+            .findFirst()
+            .orElse(Screen.getPrimary())
+            .getVisualBounds();
     }
 }

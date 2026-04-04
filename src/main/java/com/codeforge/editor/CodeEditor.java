@@ -46,6 +46,8 @@ public class CodeEditor {
     private final BorderPane root;
     private boolean dirty;
     private Consumer<Boolean> dirtyChangeListener;
+    private Consumer<String> contentChangeListener;
+    private boolean suppressChangeEvents;
 
     public CodeEditor() {
         codeArea = new CodeArea();
@@ -58,7 +60,16 @@ public class CodeEditor {
             .successionEnds(Duration.ofMillis(80))
             .subscribe(ignore -> codeArea.setStyleSpans(0, computeHighlighting(codeArea.getText())));
 
-        codeArea.textProperty().addListener((obs, oldText, newText) -> setDirty(true));
+        codeArea.textProperty().addListener((obs, oldText, newText) -> {
+            if (suppressChangeEvents) {
+                return;
+            }
+
+            setDirty(true);
+            if (contentChangeListener != null) {
+                contentChangeListener.accept(newText);
+            }
+        });
 
         root = new BorderPane(codeArea);
         root.getStyleClass().add("editor-shell");
@@ -73,9 +84,14 @@ public class CodeEditor {
     }
 
     public void setCode(String code) {
+        suppressChangeEvents = true;
         codeArea.replaceText(code == null ? "" : code);
+        suppressChangeEvents = false;
         codeArea.setStyleSpans(0, computeHighlighting(codeArea.getText()));
         setDirty(false);
+        if (contentChangeListener != null) {
+            contentChangeListener.accept(codeArea.getText());
+        }
     }
 
     public boolean isDirty() {
@@ -88,6 +104,18 @@ public class CodeEditor {
 
     public void setDirtyChangeListener(Consumer<Boolean> listener) {
         this.dirtyChangeListener = listener;
+    }
+
+    public void setContentChangeListener(Consumer<String> listener) {
+        this.contentChangeListener = listener;
+    }
+
+    public void moveTo(int line, int column) {
+        int paragraph = Math.max(0, line - 1);
+        int columnIndex = Math.max(0, column - 1);
+        codeArea.moveTo(paragraph, columnIndex);
+        codeArea.requestFollowCaret();
+        codeArea.requestFocus();
     }
 
     private StyleSpans<Collection<String>> computeHighlighting(String text) {

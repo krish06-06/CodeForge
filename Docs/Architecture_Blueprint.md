@@ -1,96 +1,129 @@
 # CodeForge Architecture Blueprint
 
-## Current assessment
+## Current state
 
-The repository already has a useful split between `editor`, `terminal`, `file`, and `compiler`, which is the right direction.
-The biggest architectural gap is that the compiler is still a proof of concept while the IDE shell is directly coupled to running external Python processes.
+The IDE shell has now moved beyond the original single-editor prototype.
+CodeForge currently has:
 
-For the target product, the custom Python engine should become a first-class backend service inside the app, not just an experiment beside the editor.
+- multi-tab editor sessions
+- multi-terminal sessions
+- lazy-loaded workspace explorer
+- file tree context actions
+- a problems panel
+- a language-service facade for validation and execution routing
 
-## Recommended stack
+The compiler is still a subset implementation, but the surrounding IDE architecture is now much better prepared for growth.
 
-- Desktop shell: JavaFX with RichTextFX
-- Language engine: Pure Java compiler pipeline
-- Execution model: Tree-walking interpreter first, bytecode VM second
-- Testing: JUnit 5 for lexer/parser/semantic/runtime tests
-
-JavaFX is a strong fit for this repo because it keeps the whole system in one language and one build toolchain.
-That matters here because your hardest problem is the compiler, not IPC or web packaging.
-
-## Target architecture
+## Active architecture
 
 ```text
-+----------------------------------------------------------------------------------+
-|                                   CodeForge IDE                                  |
-+----------------------------------------------------------------------------------+
-| Workbench Layer                                                                  |
-|  - MainApp                                                                       |
-|  - Toolbar / Command actions                                                     |
-|  - WorkspaceView                                                                 |
-|  - CodeEditor tabs                                                               |
-|  - TerminalView / Problems panel                                                 |
-+-----------------------------------------+----------------------------------------+
-                                          |
-                                          v
-+-----------------------------------------+----------------------------------------+
-|                             Language Service Facade                              |
-|  - Open file                                                                        |
-|  - Validate source                                                                  |
-|  - Run source                                                                       |
-|  - Surface diagnostics                                                              |
-+-----------------------------------------+----------------------------------------+
-                                          |
-          +-------------------------------+-------------------------------+
-          |                                                               |
-          v                                                               v
-+-----------------------------+                            +--------------------------------+
-| Compiler Pipeline           |                            | Runtime                         |
-|  Lexer                      |                            | Tree Interpreter (phase 1)      |
-|  Parser                     |                            | or                              |
-|  AST                        |                            | Bytecode Generator + VM (phase 2)|
-|  Semantic Analyzer          |                            +--------------------------------+
-|  Diagnostics                |
-+-----------------------------+
-          |
-          v
-+-----------------------------+
-| Shared Core Models          |
-|  Token                      |
-|  AST Nodes                  |
-|  Symbol Table               |
-|  Source Span                |
-|  Error Types                |
-+-----------------------------+
++--------------------------------------------------------------------------------------+
+|                                       CodeForge                                      |
++--------------------------------------------------------------------------------------+
+| Workbench UI                                                                         |
+|  - MainApp                                                                           |
+|  - Toolbar                                                                           |
+|  - WorkspaceView                                                                     |
+|  - Editor TabPane                                                                    |
+|  - Bottom Panel (Terminals + Problems)                                               |
+|  - Status Bar                                                                        |
++--------------------------------------------+-----------------------------------------+
+                                             |
+                                             v
++--------------------------------------------+-----------------------------------------+
+|                                WorkbenchController                                   |
+|  - Open/save/run commands                                                             |
+|  - Dirty-tab close confirmation                                                       |
+|  - Workspace rename/delete/copy/paste orchestration                                   |
+|  - Active-session synchronization                                                     |
+|  - Diagnostics refresh                                                                |
++----------------------------+---------------------------+------------------------------+
+                             |                           |
+                             v                           v
++----------------------------+--+         +--------------------------------------------+
+| Editor Session Layer          |         | Terminal Session Layer                      |
+|  - EditorTabManager           |         |  - TerminalManager                          |
+|  - EditorTabSession           |         |  - TerminalSession                          |
+|  - CodeEditor                 |         |  - TerminalView                             |
++-------------------------------+         +--------------------------------------------+
+                             |
+                             v
++--------------------------------------------------------------------------------------+
+|                                  LanguageService                                     |
+|  - validate(source)                                                                  |
+|  - runExternally(path, source)                                                       |
+|  Future: route supported syntax to the custom interpreter                            |
++--------------------------------------------+-----------------------------------------+
+                                             |
+                                             v
++--------------------------------------------------------------------------------------+
+|                                  Compiler Pipeline                                   |
+|  Lexer -> Tokens -> Parser -> AST -> VM                                              |
+|  Current parser supports a starter statement/expression subset for IDE diagnostics    |
++--------------------------------------------------------------------------------------+
 ```
 
 ## Module responsibilities
 
-### IDE layer
+### Workbench layer
 
-- `editor/`: text buffer, syntax highlighting, cursor state, tab presentation
-- `file/`: workspace tree, file open/save, path state
-- `terminal/`: stdin/stdout bridge for the runtime
-- `MainApp.java`: composition root only, minimal business logic
+- `MainApp.java`: layout composition and UI shell only
+- `WorkbenchController.java`: application orchestration and shared workbench state
 
-### Compiler layer
+### Editor layer
 
-- `lexer/`: raw source to token stream, including indentation and source spans
-- `parser/`: token stream to AST
-- `semantic/`: symbol resolution, scope creation, binding checks, future type rules
-- `vm/` or interpreter: AST execution or bytecode execution
-- `token/`, `ast/`, `bytecode/`: shared immutable models
+- `EditorTabManager.java`: open tabs, active tab, close flow, save flow
+- `EditorTabSession.java`: one document session, one editor, one file path, one diagnostics list
+- `CodeEditor.java`: RichTextFX editor, syntax coloring, caret navigation, dirty/content events
+- `EditorController.java`: run active editor buffer in the selected execution backend
 
-## Suggested roadmap
+### Workspace layer
 
-1. Finish lexer with indentation, comments, strings, numbers, keywords, and location-aware diagnostics.
-2. Expand the parser to support statements, blocks, assignments, expressions, and function calls.
-3. Add a semantic pass before execution so runtime behavior is not doing name resolution ad hoc.
-4. Run the custom compiler from the IDE terminal instead of the external `python` command when the active file is a CodeForge-supported subset.
-5. Add `src/test/java` with focused lexer and parser tests before increasing syntax coverage.
+- `WorkspaceView.java`: lazy tree UI and context menu dispatch
+- `FileManager.java`: filesystem operations
 
-## Immediate repo improvements
+### Terminal layer
 
-- Keep `MainApp` focused on layout and event wiring.
-- Stop letting parser/runtime depend on bare `RuntimeException`.
-- Introduce position-rich tokens now so parser and diagnostics do not need a second refactor later.
-- Prefer a tree-walking interpreter first. It is much faster to validate semantics and language design than jumping straight to bytecode.
+- `TerminalManager.java`: multiple terminal sessions
+- `TerminalSession.java`: process lifecycle, stdin/stdout bridge, cleanup on close
+- `TerminalView.java`: terminal output and input controls
+
+### Problems layer
+
+- `ProblemsView.java`: diagnostics list for the active editor
+
+### Language/compiler layer
+
+- `LanguageService.java`: IDE-facing facade for validation and execution routing
+- `compiler/lexer`: source to tokens with positions
+- `compiler/parser`: tokens to AST for the supported grammar subset
+- `compiler/ast`: immutable node models
+- `compiler/vm`: tree-walking execution for the current subset
+
+## Why this is better than the earlier structure
+
+- `MainApp` no longer owns every interaction directly.
+- File, editor, terminal, and diagnostics state each have a clearer home.
+- The workspace tree no longer rebuilds the entire folder synchronously every time.
+- The IDE now has a clean insertion point for the custom Python engine through `LanguageService`.
+
+## Recommended next build phases
+
+### Phase 1: IDE hardening
+
+- Add save-all and close-all commands.
+- Preserve expanded workspace nodes across refresh.
+- Add process stop/restart controls per terminal.
+- Add recent workspaces and session restore.
+
+### Phase 2: better language tooling
+
+- Expand parser support for blocks, comparisons, booleans, and function definitions.
+- Add semantic analysis for variable binding and scope diagnostics.
+- Surface diagnostics inline in the editor gutter, not only in the problems panel.
+
+### Phase 3: custom execution path
+
+- Run supported files through the custom interpreter first.
+- Fallback to external Python only for unsupported syntax while the engine grows.
+- Replace runtime printouts with structured runtime diagnostics for the IDE.

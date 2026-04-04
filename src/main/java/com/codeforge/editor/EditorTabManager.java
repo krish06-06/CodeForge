@@ -7,10 +7,14 @@ import javafx.scene.control.TabPane;
 import javafx.stage.Stage;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class EditorTabManager {
 
@@ -18,6 +22,8 @@ public class EditorTabManager {
     private final Map<Tab, EditorTabSession> sessionsByTab = new LinkedHashMap<>();
     private final Map<Path, EditorTabSession> sessionsByPath = new LinkedHashMap<>();
     private Consumer<EditorTabSession> activeSessionListener;
+    private Consumer<EditorTabSession> sessionOpenedListener;
+    private Predicate<EditorTabSession> closeRequestHandler;
 
     public EditorTabManager() {
         this.tabPane = new TabPane();
@@ -65,10 +71,18 @@ public class EditorTabManager {
             return;
         }
 
+        saveSession(stage, session);
+    }
+
+    public boolean saveSession(Stage stage, EditorTabSession session) throws Exception {
+        if (session == null) {
+            return false;
+        }
+
         Path previousPath = session.getFilePath();
         Path savedPath = FileManager.saveFile(stage, previousPath, session.getEditor().getCode());
         if (savedPath == null) {
-            return;
+            return false;
         }
 
         if (previousPath != null) {
@@ -78,6 +92,7 @@ public class EditorTabManager {
         session.setFilePath(savedPath);
         session.getEditor().markSaved();
         sessionsByPath.put(savedPath, session);
+        return true;
     }
 
     public void renamePath(Path oldPath, Path newPath) {
@@ -111,19 +126,38 @@ public class EditorTabManager {
     }
 
     public void closeSessionsInside(Path path) {
-        sessionsByPath.entrySet().removeIf(entry -> {
-            Path openPath = entry.getKey();
-            if (openPath != null && openPath.startsWith(path)) {
-                tabPane.getTabs().remove(entry.getValue().getTab());
-                sessionsByTab.remove(entry.getValue().getTab());
-                return true;
-            }
-            return false;
-        });
+        List<EditorTabSession> sessions = new ArrayList<>(getSessionsInside(path));
+        for (EditorTabSession session : sessions) {
+            closeSession(session, true);
+        }
 
         if (tabPane.getTabs().isEmpty()) {
             openUntitled();
         }
+    }
+
+    public Collection<EditorTabSession> getSessions() {
+        return List.copyOf(sessionsByTab.values());
+    }
+
+    public List<EditorTabSession> getSessionsInside(Path path) {
+        List<EditorTabSession> sessions = new ArrayList<>();
+        sessionsByPath.forEach((openPath, session) -> {
+            if (openPath != null && openPath.startsWith(path)) {
+                sessions.add(session);
+            }
+        });
+        return sessions;
+    }
+
+    public boolean hasDirtySessions() {
+        return sessionsByTab.values().stream().anyMatch(session -> session.getEditor().isDirty());
+    }
+
+    public List<EditorTabSession> getDirtySessionsInside(Path path) {
+        return getSessionsInside(path).stream()
+            .filter(session -> session.getEditor().isDirty())
+            .toList();
     }
 
     public Optional<Path> getActivePath() {
@@ -135,10 +169,26 @@ public class EditorTabManager {
         this.activeSessionListener = listener;
     }
 
+    public void setSessionOpenedListener(Consumer<EditorTabSession> listener) {
+        this.sessionOpenedListener = listener;
+    }
+
+    public void setCloseRequestHandler(Predicate<EditorTabSession> handler) {
+        this.closeRequestHandler = handler;
+    }
+
     private void registerSession(EditorTabSession session) {
         sessionsByTab.put(session.getTab(), session);
         tabPane.getTabs().add(session.getTab());
+        if (sessionOpenedListener != null) {
+            sessionOpenedListener.accept(session);
+        }
 
+        session.getTab().setOnCloseRequest(event -> {
+            if (!closeSession(session, false)) {
+                event.consume();
+            }
+        });
         session.getTab().setOnClosed(event -> {
             sessionsByTab.remove(session.getTab());
             if (session.getFilePath() != null) {
@@ -153,5 +203,27 @@ public class EditorTabManager {
 
     private EditorTabSession getSession(Tab tab) {
         return tab == null ? null : sessionsByTab.get(tab);
+    }
+
+    private boolean closeSession(EditorTabSession session, boolean force) {
+        if (session == null) {
+            return true;
+        }
+
+        if (!force && closeRequestHandler != null && !closeRequestHandler.test(session)) {
+            return false;
+        }
+
+        tabPane.getTabs().remove(session.getTab());
+        sessionsByTab.remove(session.getTab());
+        if (session.getFilePath() != null) {
+            sessionsByPath.remove(session.getFilePath());
+        }
+
+        if (tabPane.getTabs().isEmpty()) {
+            openUntitled();
+        }
+
+        return true;
     }
 }

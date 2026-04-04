@@ -16,7 +16,6 @@ public class TerminalManager {
     private final BorderPane root;
     private final TabPane tabPane;
     private final Map<Tab, TerminalSession> sessionsByTab = new LinkedHashMap<>();
-    private int terminalCounter = 1;
 
     public TerminalManager() {
         this.tabPane = new TabPane();
@@ -43,11 +42,12 @@ public class TerminalManager {
     }
 
     public TerminalSession createTerminal() {
-        TerminalSession session = new TerminalSession("Terminal " + terminalCounter++);
+        TerminalSession session = new TerminalSession("Terminal");
         sessionsByTab.put(session.getTab(), session);
         tabPane.getTabs().add(session.getTab());
         tabPane.getSelectionModel().select(session.getTab());
         session.getTab().setOnClosed(event -> {
+            session.dispose();
             sessionsByTab.remove(session.getTab());
             if (tabPane.getTabs().isEmpty()) {
                 createTerminal();

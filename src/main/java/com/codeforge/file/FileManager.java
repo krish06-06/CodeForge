@@ -45,7 +45,7 @@ public final class FileManager {
 
     public static Path rename(Path source, String newName) throws IOException {
         Path target = source.resolveSibling(newName);
-        return Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        return Files.move(source, target);
     }
 
     public static void delete(Path source) throws IOException {

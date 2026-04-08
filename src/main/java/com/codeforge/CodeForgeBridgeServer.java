@@ -6,7 +6,6 @@ import com.codeforge.snapshot.AISnapshotResult;
 import com.codeforge.terminal.TerminalManager;
 import com.codeforge.terminal.TerminalSession;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import javafx.application.Platform;
 
@@ -48,9 +47,12 @@ public class CodeForgeBridgeServer {
                 return thread;
             });
             server.setExecutor(executor);
+            server.createContext("/new-file", exchange -> handle(exchange, this::newFile));
             server.createContext("/open-file", exchange -> handle(exchange, this::openFile));
+            server.createContext("/create-file", exchange -> handle(exchange, this::createFile));
             server.createContext("/get-code", exchange -> handle(exchange, this::getCode));
             server.createContext("/set-code", exchange -> handle(exchange, this::setCode));
+            server.createContext("/save-as", exchange -> handle(exchange, this::saveAs));
             server.createContext("/run", exchange -> handle(exchange, this::runActive));
             server.createContext("/output", exchange -> handle(exchange, this::getOutput));
             server.createContext("/snapshot", exchange -> handle(exchange, this::getSnapshot));
@@ -80,6 +82,17 @@ public class CodeForgeBridgeServer {
         }
     }
 
+    private Response newFile(HttpExchange exchange) throws Exception {
+        requireMethod(exchange, "POST");
+        EditorTabSession session = runOnFxThread(workbench::newScratchFile);
+        return Response.ok("""
+            {
+              "ok": true,
+              "name": "%s"
+            }
+            """.formatted(escapeJson(session.getDisplayName())));
+    }
+
     private Response openFile(HttpExchange exchange) throws Exception {
         requireMethod(exchange, "POST");
         String body = readBody(exchange);
@@ -100,6 +113,30 @@ public class CodeForgeBridgeServer {
             }
             """.formatted(
             escapeJson(rawPath),
+            escapeJson(session.getDisplayName())
+        ));
+    }
+
+    private Response createFile(HttpExchange exchange) throws Exception {
+        requireMethod(exchange, "POST");
+        String body = readBody(exchange);
+        String rawPath = requireStringField(body, "path");
+        EditorTabSession session;
+        try {
+            Path path = Path.of(rawPath);
+            session = runOnFxThread(() -> workbench.createOrOpenFile(path));
+        } catch (InvalidPathException ex) {
+            throw new BadRequestException("Invalid path");
+        }
+
+        return Response.ok("""
+            {
+              "ok": true,
+              "path": "%s",
+              "display_name": "%s"
+            }
+            """.formatted(
+            escapeJson(session.getFilePath() == null ? rawPath : session.getFilePath().toString()),
             escapeJson(session.getDisplayName())
         ));
     }
@@ -135,6 +172,34 @@ public class CodeForgeBridgeServer {
               "displayName": "%s"
             }
             """.formatted(escapeJson(session.getDisplayName())));
+    }
+
+    private Response saveAs(HttpExchange exchange) throws Exception {
+        requireMethod(exchange, "POST");
+        String body = readBody(exchange);
+        String rawPath = requireStringField(body, "path");
+        EditorTabSession session;
+        try {
+            Path path = Path.of(rawPath);
+            session = runOnFxThread(() -> workbench.saveActiveAs(path));
+        } catch (InvalidPathException ex) {
+            throw new BadRequestException("Invalid path");
+        }
+
+        if (session == null || session.getFilePath() == null) {
+            throw new BadRequestException("No active editor session");
+        }
+
+        return Response.ok("""
+            {
+              "ok": true,
+              "path": "%s",
+              "display_name": "%s"
+            }
+            """.formatted(
+            escapeJson(session.getFilePath().toString()),
+            escapeJson(session.getDisplayName())
+        ));
     }
 
     private Response runActive(HttpExchange exchange) throws Exception {

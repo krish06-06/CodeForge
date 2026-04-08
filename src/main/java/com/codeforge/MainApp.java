@@ -29,27 +29,31 @@ public class MainApp extends Application {
     public void start(Stage stage) {
         WorkbenchController workbench = new WorkbenchController(stage);
 
-        Button newFileButton = createToolbarButton("＋", "New File", false);
-        newFileButton.setOnAction(event -> workbench.newFile());
+        Button newScratchButton = createToolbarButton("+", "New Scratch", false);
+        newScratchButton.setOnAction(event -> workbench.newScratchFile());
 
-        Button openFileButton = createToolbarButton("⌂", "Open File", false);
+        Button createFileButton = createToolbarButton("+", "Create File", false);
+        createFileButton.setOnAction(event -> workbench.createFile());
+
+        Button openFileButton = createToolbarButton("O", "Open File", false);
         openFileButton.setOnAction(event -> workbench.openFileChooser());
 
-        Button openFolderButton = createToolbarButton("▣", "Open Folder", false);
+        Button openFolderButton = createToolbarButton("F", "Open Folder", false);
         openFolderButton.setOnAction(event -> workbench.openFolderChooser());
 
-        Button saveButton = createToolbarButton("⇣", "Save", false);
+        Button saveButton = createToolbarButton("S", "Save", false);
         saveButton.setOnAction(event -> workbench.saveActive());
 
-        Button runButton = createToolbarButton("▶", "Run", true);
+        Button runButton = createToolbarButton(">", "Run", true);
         runButton.setOnAction(event -> workbench.runActive());
 
-        Button newTerminalButton = createToolbarButton("⌘", "New Terminal", false);
+        Button newTerminalButton = createToolbarButton("T", "New Terminal", false);
         newTerminalButton.setOnAction(event -> workbench.newTerminal());
 
         HBox toolbar = new HBox(
             10,
-            newFileButton,
+            newScratchButton,
+            createFileButton,
             openFileButton,
             openFolderButton,
             new Separator(),
@@ -112,8 +116,8 @@ public class MainApp extends Application {
         stage.setMinHeight(760);
         stage.setScene(scene);
         stage.show();
-        this.bridgeServer = new CodeForgeBridgeServer(workbench);
-        this.bridgeServer.start();
+        bridgeServer = new CodeForgeBridgeServer(workbench);
+        bridgeServer.start();
         Platform.runLater(() -> positionStageSafely(stage));
         stage.xProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
         stage.yProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));

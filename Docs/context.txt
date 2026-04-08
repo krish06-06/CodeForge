@@ -3,322 +3,264 @@ CodeForge Context
 1. Project Overview
 
 CodeForge is a Java-based desktop IDE built with JavaFX.
-Its current role is to provide a lightweight code editing environment focused on Python editing and execution, with multiple editor tabs, multiple terminal tabs, a workspace tree, a problems panel, and an AI Snapshot panel.
-The editor uses RichTextFX for code editing and syntax coloring.
-Python execution is still performed through the external Python interpreter, not through the internal compiler pipeline.
-The compiler package is currently used mainly for validation and diagnostics inside the IDE.
-The AI Snapshot feature analyzes validation state and runtime terminal output, with local pattern detection first and Groq-based analysis as a fallback.
-Configuration values such as the Groq API key are loaded through a ConfigManager that reads the project .env file.
+It currently focuses on Python editing, file management, execution, diagnostics, and lightweight runtime summaries.
+The application combines:
+
+- a RichTextFX-based code editor
+- multi-tab document sessions
+- workspace browsing and file actions
+- multiple terminal tabs
+- parser-backed diagnostics
+- AI Snapshot summaries
+- external Python execution through `PythonRunner`
+
+The internal compiler package is already present and currently powers validation more than full execution.
 
 2. Entry Point
 
-The startup entry is Launcher.java, which forwards directly to MainApp.main(args).
-MainApp.main(args) loads configuration through ConfigManager.load() and then calls Application.launch().
-MainApp.start(Stage stage) builds the entire UI shell.
-UI initialization happens in MainApp by creating a WorkbenchController and then composing the JavaFX layout around the controller’s views:
-- workspace explorer on the left
-- editor tab area in the center
+`Launcher.java` forwards directly to `MainApp.main(args)`.
+`MainApp.main(args)` loads configuration through `ConfigManager.load()` and then launches the JavaFX application.
+`MainApp.start(Stage stage)` builds the visible shell:
+
+- toolbar
+- workspace explorer
+- editor area
 - bottom tabs for terminals, problems, and AI Snapshot
-- toolbar buttons for new file, open file, open folder, save, run, and new terminal
-- status bar bound to WorkbenchController.statusProperty()
-MainApp is primarily a layout and shell class. Most behavior lives in WorkbenchController.
+- status bar
+
+Most interaction logic is delegated to `WorkbenchController`.
 
 3. Editor System
 
-CodeEditor.java
-CodeEditor wraps a RichTextFX CodeArea inside a BorderPane.
-It stores the current text inside the CodeArea.
-Programmatic text access is done through getCode() and setCode(String code).
-Dirty state is tracked internally and exposed through isDirty(), markSaved(), setDirtyChangeListener(...), and setContentChangeListener(...).
-It also supports moveTo(line, column) so diagnostics can jump the caret to a precise location.
+`CodeEditor.java`
 
-EditorTabSession.java
-EditorTabSession represents one open document session.
-Each session owns:
-- one Tab
-- one CodeEditor
-- one file path, which may be null for untitled files
-- one diagnostics list
-- one AI snapshot result
-The session does not store file content separately from CodeEditor. The authoritative in-memory text is the editor’s current CodeArea content.
+- wraps a RichTextFX `CodeArea`
+- stores the live editor text
+- exposes `getCode()` and `setCode(...)`
+- tracks dirty state
+- exposes content and dirty listeners
+- supports `moveTo(line, column)` for diagnostics navigation
 
-EditorTabManager.java
-EditorTabManager owns the editor TabPane and the collection of open sessions.
-It supports opening untitled sessions, opening files by Path, saving sessions, renaming open paths, closing sessions, finding the active session, and querying open or dirty sessions.
-Files are opened through openFile(Path path), which reads file text through FileManager.readFile(path), creates an EditorTabSession, and selects its tab.
-If the path is already open, the existing session is reused.
-The easiest programmatic route to the active editor content is:
-EditorTabManager.getActiveSession() -> EditorTabSession.getEditor() -> CodeEditor.getCode()
+`EditorTabSession.java`
 
-EditorController.java
-EditorController handles execution of the active editor buffer.
-It asks EditorTabManager for the active session, asks TerminalManager for an active terminal, and asks LanguageService to run the current file text externally.
-It then attaches the resulting Process to a TerminalSession and forwards lifecycle events through ExecutionListener.
-ExecutionListener receives:
-- run started
-- transcript updates
-- run finished with exit code and transcript
-- run failure before normal execution
-- terminal stream errors
+- represents one open document session
+- owns a `Tab`
+- owns one `CodeEditor`
+- tracks the current `Path`, if any
+- stores diagnostics for that session
+- stores the current AI Snapshot result for that session
+
+`EditorTabManager.java`
+
+- owns the editor `TabPane`
+- creates untitled scratch sessions
+- opens file-backed sessions from disk
+- saves sessions
+- saves sessions directly to a specified path
+- tracks the active session
+- keeps one session per normalized file path
+
+`EditorController.java`
+
+- runs the active editor session
+- asks `LanguageService` for a process
+- attaches that process to a terminal
+- forwards run lifecycle events through `ExecutionListener`
 
 How files are opened
-Files are opened either from the file chooser or from the workspace tree.
-WorkbenchController routes those UI events into editorTabs.openFile(path).
-WorkspaceView triggers file open through its listener when a file node is double-clicked.
+
+- from the file chooser through `WorkbenchController.openFileChooser()`
+- from the workspace tree through `WorkspaceView`
+- from direct file creation through `WorkbenchController.createOrOpenFile(...)`
 
 How content is stored
-The live document text is stored inside CodeEditor’s CodeArea.
-EditorTabSession stores metadata about the file and editor, not a separate text copy.
+
+- the authoritative in-memory text is in `CodeEditor`
+- `EditorTabSession` stores metadata and the editor instance, not a separate text copy
 
 How text is accessed programmatically
-The main access points are CodeEditor.getCode() and CodeEditor.setCode(...).
-An external integration inside the same JVM could reach text through the active EditorTabSession.
+
+- `EditorTabManager.getActiveSession()`
+- `EditorTabSession.getEditor()`
+- `CodeEditor.getCode()`
 
 4. File Management
 
-FileManager.java is the low-level filesystem utility.
-It is a static utility class.
-It handles:
-- chooseFile(Stage) through JavaFX FileChooser
-- readFile(Path) through Files.readString(...)
-- saveFile(Stage, Path, String) through Files.writeString(...)
-- rename(Path, String)
-- delete(Path), including recursive directory deletion
-- copy(Path, Path), including recursive directory copy
-File paths are represented with java.nio.file.Path throughout the codebase.
-Open editor sessions are keyed by Path inside EditorTabManager.
-Rename and delete actions are coordinated at the WorkbenchController layer and then applied through FileManager plus editor/session updates.
+`FileManager.java` is the low-level filesystem utility.
+It currently handles:
+
+- file open chooser
+- save chooser
+- file reads
+- file writes
+- ensure-file-exists behavior
+- rename
+- delete
+- copy
+
+Files are represented as `java.nio.file.Path`.
+`EditorTabManager` stores open file-backed sessions by normalized path so the same file is not opened twice in separate tabs.
 
 5. Terminal System
 
-TerminalManager.java
-TerminalManager owns the terminal TabPane and a map of Tab to TerminalSession.
-It creates a default terminal on startup and can create more terminals on demand.
-Its role is session management rather than process execution logic.
+`TerminalManager.java`
 
-TerminalSession.java
-TerminalSession represents one process-backed terminal session.
-Important detail: it does not create shell commands on its own.
-Instead, another component gives it a Process through attachProcess(Process process, String header, TerminalSessionListener listener).
-When attached to a Process, it:
-- clears the view
-- prints a header
-- stores the process
-- creates an input writer connected to process stdin
-- starts a background thread that reads stdout
-Output is captured into a StringBuilder transcript as chunks arrive.
-Each chunk is also sent to the UI and to the TerminalSessionListener.
-At finish, the full transcript is passed to listener.onFinished(...).
-At error, the current transcript is passed to listener.onError(...).
-There is currently no public getter that exposes transcript history after the fact. The main retrieval path is through the listener callbacks.
+- owns the terminal `TabPane`
+- creates and selects terminal sessions
+- returns the active terminal session
 
-TerminalView.java
-TerminalView is the JavaFX UI for terminal display and input.
-It uses:
-- a read-only TextArea for output
-- a TextField for input
-- a Send button
-print(String text) appends output to the text area.
-echoInput(String text) mirrors user input into the output area.
-setInputHandler(...) enables or disables stdin forwarding depending on whether a process is active.
+`TerminalSession.java`
+
+- owns one terminal tab and view
+- accepts an externally created `Process`
+- streams stdout into the UI
+- stores a transcript in memory
+- forwards events through `TerminalSessionListener`
+- now exposes `getTranscript()` for safe transcript retrieval
+
+`TerminalView.java`
+
+- displays terminal output in a read-only `TextArea`
+- provides a text field and send button for stdin
+- appends output through `print(...)`
 
 How commands are executed
-In the current architecture, the terminal layer does not execute arbitrary commands directly.
-It displays and manages a Process that was already started elsewhere, usually by PythonRunner through LanguageService and EditorController.
+
+The terminal layer does not start arbitrary shell commands by itself.
+It displays and manages a `Process` created elsewhere, usually by `PythonRunner`.
 
 How output is captured
-TerminalSession.streamOutput() reads process stdout through an InputStreamReader.
-stderr is merged into stdout before the process reaches the terminal because PythonRunner uses redirectErrorStream(true).
-The transcript is accumulated incrementally in a StringBuilder.
+
+`TerminalSession.streamOutput()` reads from the process input stream, appends chunks to the transcript, updates the terminal UI, and forwards the latest full transcript to listeners.
 
 How output can be retrieved
-The current retrievable paths are event-driven:
-- TerminalSessionListener.onOutput(..., transcript)
-- TerminalSessionListener.onFinished(..., transcript)
-- TerminalSessionListener.onError(..., transcript, message)
-There is no standalone public transcript getter on TerminalSession.
+
+- through `TerminalSessionListener` callbacks while a run is active
+- through `TerminalSession.getTranscript()` for the current active terminal session
 
 6. Python Execution
 
-PythonRunner.java is the actual runtime bridge to Python.
-It is a static utility class with run(Path filePath, String code).
-When a file path already exists, it writes the current in-memory code into that file before execution.
-When there is no saved file path, it creates a temporary .py file, writes the code into it, and schedules it for deletion on exit.
-It then starts:
-python <absolute-path-to-file>
-ProcessBuilder.redirectErrorStream(true) is enabled, so Python stderr is merged into stdout.
-The returned Process is consumed by TerminalSession.
-That means output and errors are returned through the same process stream and appear in the terminal transcript.
+`PythonRunner.java` is the current runtime path for Python execution.
+
+It:
+
+- writes the active editor content to the backing file when a file path exists
+- creates a temporary `.py` file when the session is still untitled
+- starts `python <file-path>`
+- merges stderr into stdout with `redirectErrorStream(true)`
+
+That process is then attached to `TerminalSession`, so runtime output and errors appear in the terminal transcript.
 
 7. Language / Analysis System
 
-LanguageService.java
-LanguageService is the IDE-facing analysis and execution facade.
-validate(String source) performs syntax diagnostics using the internal compiler pipeline:
-- Lexer tokenizes the source
-- Parser parses the token list
-- lexer and parser exceptions are turned into Diagnostic objects
-If validation succeeds, an empty diagnostic list is returned.
-runExternally(Path filePath, String source) delegates execution to PythonRunner.run(...).
+`LanguageService.java`
 
-ProblemsView.java
-ProblemsView is the UI for diagnostics.
-It displays a ListView<Diagnostic>.
-The active editor’s diagnostics are pushed into it by WorkbenchController.
-Double-clicking a diagnostic triggers a listener so WorkbenchController can move the editor caret to the reported line and column.
+- validates source text through the internal lexer and parser
+- turns lexer and parser exceptions into `Diagnostic` objects
+- delegates execution to `PythonRunner`
+
+`ProblemsView.java`
+
+- displays the diagnostics of the active editor session
+- lets the user double-click a diagnostic to navigate the caret to that location
 
 How errors are detected
-Pre-run errors are detected by LanguageService.validate(...) using the internal lexer and parser.
-These are syntax or parser-level diagnostics for the subset compiler, not full Python runtime errors.
-Runtime errors are not shown in ProblemsView. They go to the terminal transcript and AI Snapshot path instead.
+
+- pre-run syntax and parser errors are detected by `LanguageService.validate(...)`
+- runtime errors are not shown in the Problems panel
+- runtime output and runtime failures appear in the terminal and AI Snapshot flow
 
 8. AI Snapshot System
 
-AISnapshotService.java
-AISnapshotService receives two kinds of data:
-- active editor diagnostics through summarizeValidation(EditorTabSession)
-- terminal transcript plus exit code through analyzeExecution(String transcript, int exitCode)
-It first sanitizes and truncates runtime output.
-It then checks local fast-path rules for common Python failures such as:
-- ModuleNotFoundError
-- SyntaxError
-- NameError
-- FileNotFoundError
-- ImportError
-If no local match is found and the output appears meaningful, it can fall back to an LLM through LLMClient.
-The default implementation is GroqClient, which uses the model llama-3.1-8b-instant.
-The service parses the model response into a structured AISnapshotResult with:
-- problem
-- cause
-- fix
-- confidence
-It also caches the last analyzed output/result pair to avoid repeated analysis of the same transcript.
+`AISnapshotService.java`
 
-AISnapshotView.java
-AISnapshotView is a structured JavaFX panel, not a chatbot-style text console.
-It displays four labeled values:
+- summarizes pre-run validation state
+- analyzes terminal transcript plus exit code after execution
+- uses local fast-path checks first for common Python failures
+- can fall back to a model-backed provider through `LLMClient`
+- returns structured `AISnapshotResult` values
+
+`AISnapshotView.java`
+
+- renders four labeled values
 - Problem
 - Cause
 - Fix
 - Confidence
-WorkbenchController pushes AISnapshotResult objects into this view.
+
+What data it receives
+
+- active session diagnostics before execution
+- terminal transcript and exit code after execution
 
 How it analyzes terminal output
-After a run finishes, WorkbenchController sends the terminal transcript and exit code to AISnapshotService on a background executor.
-AISnapshotService performs local detection first.
-If local detection does not explain the output, it may call the configured LLM provider.
-If configuration is missing or the request fails, the service returns a safe fallback result instead of crashing the app.
+
+- trims and truncates long transcript text
+- checks common runtime patterns such as `ModuleNotFoundError`, `SyntaxError`, `NameError`, `FileNotFoundError`, and `ImportError`
+- falls back to the configured provider only when local detection does not already explain the output
 
 9. Internal Flow
 
 User writes code -> runs code -> output appears
 
-1. The user edits text inside CodeEditor.
-2. CodeEditor fires the content change listener.
-3. WorkbenchController.validateSession(...) calls LanguageService.validate(...) for the active editor text.
-4. WorkbenchController stores diagnostics in EditorTabSession and pushes them into ProblemsView.
-5. WorkbenchController also updates the per-session AI snapshot with summarizeValidation(...).
-6. When the user runs code, WorkbenchController.runActive() calls EditorController.runActiveFile().
-7. EditorController gets the active EditorTabSession, collects the current editor text, and asks LanguageService.runExternally(...) to execute it.
-8. LanguageService delegates to PythonRunner.run(...), which writes the current code to disk or a temp file and starts a Python process.
-9. EditorController attaches that Process to a TerminalSession from TerminalManager.
-10. TerminalSession reads output in a background thread, appends it to its transcript, and prints it into TerminalView.
-11. When the process finishes, TerminalSessionListener forwards the exit code and full transcript back into EditorController, then into WorkbenchController through ExecutionListener.
-12. WorkbenchController calls AISnapshotService.analyzeExecution(...) asynchronously.
-13. AISnapshotService returns an AISnapshotResult based on local detection or Groq analysis.
-14. WorkbenchController stores that result in EditorTabSession and updates AISnapshotView if the session is still active.
-15. ProblemsView continues to represent pre-run diagnostics, while TerminalView and AI Snapshot represent runtime behavior.
+1. The user edits text inside `CodeEditor`.
+2. `WorkbenchController` validates the active session through `LanguageService`.
+3. Diagnostics are stored in `EditorTabSession`.
+4. `ProblemsView` is refreshed for the active session.
+5. `AISnapshotService.summarizeValidation(...)` updates the session snapshot.
+6. `WorkbenchController.runActive()` triggers `EditorController.runActiveFile()`.
+7. `LanguageService.runExternally(...)` delegates to `PythonRunner`.
+8. `PythonRunner` writes the current code to disk and starts the Python process.
+9. `TerminalSession` streams output into `TerminalView` and stores the transcript.
+10. When execution completes, `WorkbenchController` sends the transcript to `AISnapshotService`.
+11. `AISnapshotView` updates with the latest structured result for the active session.
 
-10. External Control Feasibility
+10. Current File Creation Workflow
 
-Can CodeForge be controlled programmatically?
-Yes, but mainly from inside the same JVM process or through a future adapter layer. The project does not currently expose a remote API, scripting API, socket API, or plugin control surface for outside systems.
+CodeForge now supports both temporary and file-backed work.
 
-Which parts are easiest to expose
+Scratch workflow
 
-Open file
-This is feasible.
-The cleanest existing method is EditorTabManager.openFile(Path path).
-WorkbenchController also supports open behavior, but its direct openFile(Path) helper is private.
+- `New Scratch` creates an untitled tab
+- the content stays in memory until the user saves it
+- `PythonRunner` can still execute untitled work by using a temporary file
 
-Get file content
-This is feasible.
-The main route is:
-EditorTabManager.getActiveSession() -> EditorTabSession.getEditor() -> CodeEditor.getCode()
+Named file workflow
 
-Replace content
-This is feasible.
-The main route is:
-EditorTabSession.getEditor().setCode(...)
-That path already updates validation state through the existing content listeners.
+- `Create File` creates or opens a real file on disk immediately
+- when a workspace root is open, that root is the preferred location
+- otherwise the active file's parent directory is used when available
+- if no clean location is available, the app falls back to a save dialog
 
-Run code
-This is feasible.
-The easiest existing method is WorkbenchController.runActive().
-A lower-level route is EditorController.runActiveFile().
+Save behavior
 
-Get terminal output
-This is partially feasible.
-Live output is available through TerminalSessionListener and ExecutionListener callbacks.
-However, there is no public method on TerminalSession that returns the stored transcript after execution, so passive retrieval is weaker than event-driven capture.
+- file-backed sessions save directly to their current path
+- untitled sessions prompt for a real path
+- saving to a specific path updates session metadata and tab title through `EditorTabManager`
 
-Overall assessment
-The editor, runner, validation, and snapshot layers are modular enough that a future integration layer is realistic.
-The main missing piece for external control is a dedicated public facade that exposes these operations without going through private controller helpers or JavaFX widgets directly.
+11. Current Supporting Services
 
-11. Suggested Integration Points
+`ConfigManager.java`
 
-Best existing entry points for external control
+- loads `.env` once at startup
+- serves configuration values such as `GROQ_API_KEY`
 
-WorkbenchController
-Best high-level coordinator for user-like actions.
-Useful public methods already exist for:
-- newFile()
-- openFileChooser()
-- openFolderChooser()
-- saveActive()
-- runActive()
-- newTerminal()
-This is the best place for a future integration facade if the goal is to mimic normal IDE behavior.
+`AISnapshotResult.java`
 
-EditorTabManager
-Best direct entry for programmatic document/session control.
-Useful methods include:
-- openFile(Path)
-- openUntitled()
-- getActiveSession()
-- saveSession(...)
-- getSessions()
-- getActivePath()
+- keeps the snapshot output structured and session-friendly
 
-EditorTabSession + CodeEditor
-Best direct entry for content access and replacement.
-Useful accessors include:
-- EditorTabSession.getEditor()
-- CodeEditor.getCode()
-- CodeEditor.setCode(...)
-- CodeEditor.moveTo(...)
+`ExecutionListener.java` and `TerminalSessionListener.java`
 
-LanguageService
-Best service-level integration point for non-UI validation and external execution routing.
-Useful methods include:
-- validate(String source)
-- runExternally(Path, String)
+- keep editor-run orchestration and terminal process events loosely connected
 
-EditorController
-Best lower-level execution bridge if an integration already knows which editor/session should run.
-Useful method:
-- runActiveFile()
+Current project character
 
-TerminalSessionListener / ExecutionListener
-Best current hooks for retrieving live terminal transcripts and run lifecycle events.
-These are the strongest current integration points for external monitoring.
+CodeForge is currently strongest as a structured desktop IDE shell with:
 
-AISnapshotService
-Best current service for converting validation state or terminal transcripts into structured debugging summaries.
-Useful methods include:
-- summarizeValidation(EditorTabSession)
-- analyzeExecution(String transcript, int exitCode)
+- editor sessions
+- file-backed and scratch workflows
+- Python execution
+- diagnostic feedback
+- concise runtime summaries
 
-Important limitation to keep in mind
-If another system needs reliable post-run transcript retrieval without subscribing to live callbacks, TerminalSession would need a public transcript accessor or a wrapper service in the future. That is not present today.
+The major responsibilities of the codebase now have a clear home, which makes the project easier to extend without rewriting the whole shell.

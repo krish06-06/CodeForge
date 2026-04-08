@@ -48,15 +48,16 @@ public class EditorTabManager {
     }
 
     public EditorTabSession openFile(Path path) throws Exception {
-        EditorTabSession existing = sessionsByPath.get(path);
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        EditorTabSession existing = sessionsByPath.get(normalizedPath);
         if (existing != null) {
             tabPane.getSelectionModel().select(existing.getTab());
             return existing;
         }
 
-        EditorTabSession session = new EditorTabSession(path, FileManager.readFile(path));
+        EditorTabSession session = new EditorTabSession(normalizedPath, FileManager.readFile(normalizedPath));
         registerSession(session);
-        sessionsByPath.put(path, session);
+        sessionsByPath.put(normalizedPath, session);
         tabPane.getSelectionModel().select(session.getTab());
         return session;
     }
@@ -79,29 +80,38 @@ public class EditorTabManager {
             return false;
         }
 
-        Path previousPath = session.getFilePath();
-        Path savedPath = FileManager.saveFile(stage, previousPath, session.getEditor().getCode());
-        if (savedPath == null) {
+        Path currentPath = session.getFilePath();
+        if (currentPath != null) {
+            return saveSessionToPath(session, currentPath);
+        }
+
+        Path chosenPath = FileManager.chooseSavePath(stage, null);
+        if (chosenPath == null) {
             return false;
         }
 
-        if (previousPath != null) {
-            sessionsByPath.remove(previousPath);
+        return saveSessionToPath(session, chosenPath);
+    }
+
+    public boolean saveSessionToPath(EditorTabSession session, Path targetPath) throws Exception {
+        if (session == null || targetPath == null) {
+            return false;
         }
 
-        session.setFilePath(savedPath);
-        session.getEditor().markSaved();
-        sessionsByPath.put(savedPath, session);
+        FileManager.writeFile(targetPath, session.getEditor().getCode());
+        persistSessionPath(session, targetPath);
         return true;
     }
 
     public void renamePath(Path oldPath, Path newPath) {
+        Path normalizedOldPath = oldPath.toAbsolutePath().normalize();
+        Path normalizedNewPath = newPath.toAbsolutePath().normalize();
         Map<Path, EditorTabSession> remapped = new LinkedHashMap<>();
 
         sessionsByPath.forEach((path, session) -> {
-            if (path.equals(oldPath) || path.startsWith(oldPath)) {
-                Path relative = oldPath.equals(path) ? Path.of("") : oldPath.relativize(path);
-                Path updated = relative.toString().isEmpty() ? newPath : newPath.resolve(relative);
+            if (path.equals(normalizedOldPath) || path.startsWith(normalizedOldPath)) {
+                Path relative = normalizedOldPath.equals(path) ? Path.of("") : normalizedOldPath.relativize(path);
+                Path updated = relative.toString().isEmpty() ? normalizedNewPath : normalizedNewPath.resolve(relative);
                 session.setFilePath(updated);
                 remapped.put(updated, session);
             } else {
@@ -114,7 +124,7 @@ public class EditorTabManager {
     }
 
     public void closePath(Path path) {
-        EditorTabSession session = sessionsByPath.remove(path);
+        EditorTabSession session = sessionsByPath.remove(path.toAbsolutePath().normalize());
         if (session != null) {
             tabPane.getTabs().remove(session.getTab());
             sessionsByTab.remove(session.getTab());
@@ -141,9 +151,10 @@ public class EditorTabManager {
     }
 
     public List<EditorTabSession> getSessionsInside(Path path) {
+        Path normalizedPath = path.toAbsolutePath().normalize();
         List<EditorTabSession> sessions = new ArrayList<>();
         sessionsByPath.forEach((openPath, session) -> {
-            if (openPath != null && openPath.startsWith(path)) {
+            if (openPath != null && openPath.startsWith(normalizedPath)) {
                 sessions.add(session);
             }
         });
@@ -175,6 +186,23 @@ public class EditorTabManager {
 
     public void setCloseRequestHandler(Predicate<EditorTabSession> handler) {
         this.closeRequestHandler = handler;
+    }
+
+    private void persistSessionPath(EditorTabSession session, Path targetPath) {
+        Path normalizedTarget = targetPath.toAbsolutePath().normalize();
+        EditorTabSession existing = sessionsByPath.get(normalizedTarget);
+        if (existing != null && existing != session) {
+            throw new IllegalStateException("File is already open in another tab: " + normalizedTarget);
+        }
+
+        Path previousPath = session.getFilePath();
+        if (previousPath != null) {
+            sessionsByPath.remove(previousPath.toAbsolutePath().normalize());
+        }
+
+        session.setFilePath(normalizedTarget);
+        session.getEditor().markSaved();
+        sessionsByPath.put(normalizedTarget, session);
     }
 
     private void registerSession(EditorTabSession session) {

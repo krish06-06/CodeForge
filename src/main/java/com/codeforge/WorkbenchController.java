@@ -153,8 +153,30 @@ public class WorkbenchController {
     }
 
     public void newFile() {
+        newScratchFile();
+    }
+
+    public EditorTabSession newScratchFile() {
         EditorTabSession session = editorTabs.openUntitled();
         setStatus("Created " + session.getDisplayName());
+        return session;
+    }
+
+    public void createFile() {
+        try {
+            Path targetPath = chooseCreatePath();
+            if (targetPath == null) {
+                return;
+            }
+
+            boolean existed = Files.exists(targetPath);
+            EditorTabSession session = createOrOpenFile(targetPath);
+            if (session != null) {
+                setStatus((existed ? "Opened " : "Created ") + session.getDisplayName());
+            }
+        } catch (Exception ex) {
+            setStatus("Create failed: " + ex.getMessage());
+        }
     }
 
     public void openFileChooser() {
@@ -191,6 +213,23 @@ public class WorkbenchController {
         }
     }
 
+    public EditorTabSession saveActiveAs(Path targetPath) throws Exception {
+        EditorTabSession session = editorTabs.getActiveSession();
+        if (session == null) {
+            return null;
+        }
+
+        boolean saved = editorTabs.saveSessionToPath(session, targetPath);
+        if (!saved) {
+            return null;
+        }
+
+        validateSession(session);
+        updateSnapshotForSession(session);
+        setStatus("Saved " + session.getDisplayName());
+        return session;
+    }
+
     public void runActive() {
         EditorTabSession session = editorTabs.getActiveSession();
         if (session == null) {
@@ -206,10 +245,16 @@ public class WorkbenchController {
         setStatus("Opened " + session.getName());
     }
 
+    public EditorTabSession createOrOpenFile(Path targetPath) throws Exception {
+        Path resolvedPath = FileManager.ensureFileExists(targetPath).toAbsolutePath().normalize();
+        EditorTabSession session = editorTabs.openFile(resolvedPath);
+        setStatus("Opened " + resolvedPath);
+        return session;
+    }
+
     private void openFile(Path path) {
         try {
-            editorTabs.openFile(path);
-            setStatus("Opened " + path);
+            createOrOpenFile(path);
         } catch (Exception ex) {
             setStatus("Open failed: " + ex.getMessage());
         }
@@ -388,6 +433,59 @@ public class WorkbenchController {
 
     private void setStatus(String message) {
         status.set(message);
+    }
+
+    private Path chooseCreatePath() {
+        Path preferredDirectory = resolvePreferredCreateDirectory();
+        if (preferredDirectory != null) {
+            String fileName = promptForFileName(preferredDirectory);
+            if (fileName == null) {
+                return null;
+            }
+            return preferredDirectory.resolve(fileName);
+        }
+
+        return FileManager.chooseSavePath(stage, editorTabs.getActivePath().orElse(null));
+    }
+
+    private Path resolvePreferredCreateDirectory() {
+        Path workspaceRoot = workspaceView.getRootPath();
+        if (workspaceRoot != null && Files.isDirectory(workspaceRoot)) {
+            return workspaceRoot;
+        }
+
+        Path activePath = editorTabs.getActivePath().orElse(null);
+        if (activePath != null) {
+            Path parent = activePath.getParent();
+            if (parent != null && Files.isDirectory(parent)) {
+                return parent;
+            }
+        }
+        return null;
+    }
+
+    private String promptForFileName(Path directory) {
+        TextInputDialog dialog = new TextInputDialog("new_file.py");
+        dialog.initOwner(stage);
+        dialog.setTitle("Create File");
+        dialog.setHeaderText("Create file in " + directory);
+        dialog.setContentText("File name:");
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return null;
+        }
+
+        String fileName = result.get().trim();
+        if (fileName.isEmpty()) {
+            setStatus("Create failed: file name is required");
+            return null;
+        }
+        if (fileName.contains("/") || fileName.contains("\\") || ".".equals(fileName) || "..".equals(fileName)) {
+            setStatus("Create failed: enter a file name, not a path");
+            return null;
+        }
+        return fileName;
     }
 
     private void updateSnapshotForSession(EditorTabSession session) {

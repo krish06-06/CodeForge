@@ -4,7 +4,6 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -27,19 +26,61 @@ public final class FileManager {
         return Files.readString(path);
     }
 
+    public static Path chooseSavePath(Stage stage, Path currentPath) {
+        FileChooser chooser = new FileChooser();
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Python Files", "*.py"));
+        if (currentPath != null) {
+            Path parent = currentPath.getParent();
+            if (parent != null && Files.isDirectory(parent)) {
+                chooser.setInitialDirectory(parent.toFile());
+            }
+            Path fileName = currentPath.getFileName();
+            if (fileName != null) {
+                chooser.setInitialFileName(fileName.toString());
+            }
+        }
+
+        var file = chooser.showSaveDialog(stage);
+        return file == null ? null : file.toPath();
+    }
+
     public static Path saveFile(Stage stage, Path currentPath, String content) throws IOException {
         Path targetPath = currentPath;
         if (targetPath == null) {
-            FileChooser chooser = new FileChooser();
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Python Files", "*.py"));
-            var file = chooser.showSaveDialog(stage);
-            if (file == null) {
-                return null;
-            }
-            targetPath = file.toPath();
+            targetPath = chooseSavePath(stage, null);
+        }
+        if (targetPath == null) {
+            return null;
         }
 
-        Files.writeString(targetPath, content);
+        return writeFile(targetPath, content);
+    }
+
+    public static Path writeFile(Path targetPath, String content) throws IOException {
+        if (targetPath == null) {
+            return null;
+        }
+
+        Path parent = targetPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(targetPath, content == null ? "" : content);
+        return targetPath;
+    }
+
+    public static Path ensureFileExists(Path targetPath) throws IOException {
+        if (targetPath == null) {
+            return null;
+        }
+
+        Path parent = targetPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        if (Files.notExists(targetPath)) {
+            Files.writeString(targetPath, "");
+        }
         return targetPath;
     }
 

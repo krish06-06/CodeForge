@@ -1,28 +1,35 @@
 CodeForge/
+|-- README.md
 |-- build.gradle
 |-- settings.gradle
 |-- gradle.properties
 |-- Docs/
 |   |-- Architecture_Blueprint.md
-|   `-- Directory_Structure.txt
+|   |-- Directory_Structure.txt
+|   `-- context.txt
 |-- src/
 |   |-- main/
 |   |   |-- java/
 |   |   |   `-- com/codeforge/
+|   |   |       |-- CodeForgeBridgeServer.java
 |   |   |       |-- Launcher.java
 |   |   |       |-- MainApp.java
 |   |   |       |-- WorkbenchController.java
+|   |   |       |-- config/
+|   |   |       |   `-- ConfigManager.java
 |   |   |       |-- editor/
 |   |   |       |   |-- CodeEditor.java
 |   |   |       |   |-- EditorController.java
 |   |   |       |   |-- EditorTabManager.java
-|   |   |       |   `-- EditorTabSession.java
+|   |   |       |   |-- EditorTabSession.java
+|   |   |       |   `-- ExecutionListener.java
 |   |   |       |-- file/
 |   |   |       |   |-- FileManager.java
 |   |   |       |   `-- WorkspaceView.java
 |   |   |       |-- terminal/
 |   |   |       |   |-- TerminalManager.java
 |   |   |       |   |-- TerminalSession.java
+|   |   |       |   |-- TerminalSessionListener.java
 |   |   |       |   `-- TerminalView.java
 |   |   |       |-- problems/
 |   |   |       |   `-- ProblemsView.java
@@ -32,20 +39,29 @@ CodeForge/
 |   |   |       |   `-- LanguageService.java
 |   |   |       |-- runner/
 |   |   |       |   `-- PythonRunner.java
+|   |   |       |-- snapshot/
+|   |   |       |   |-- AISnapshotResult.java
+|   |   |       |   |-- AISnapshotService.java
+|   |   |       |   |-- AISnapshotView.java
+|   |   |       |   |-- GroqClient.java
+|   |   |       |   `-- LLMClient.java
 |   |   |       `-- compiler/
 |   |   |           |-- CompilerMain.java
 |   |   |           |-- PythonCompilerRunner.java
 |   |   |           |-- ast/
-|   |   |           |   |-- Node.java
-|   |   |           |   |-- ProgramNode.java
 |   |   |           |   |-- AssignmentNode.java
-|   |   |           |   |-- VariableNode.java
+|   |   |           |   |-- BinOpNode.java
+|   |   |           |   |-- ExpressionStatementNode.java
+|   |   |           |   |-- Node.java
 |   |   |           |   |-- NumberNode.java
+|   |   |           |   |-- PrintNode.java
+|   |   |           |   |-- ProgramNode.java
 |   |   |           |   |-- StringNode.java
 |   |   |           |   |-- UnaryOpNode.java
-|   |   |           |   |-- BinOpNode.java
-|   |   |           |   |-- PrintNode.java
-|   |   |           |   `-- ExpressionStatementNode.java
+|   |   |           |   `-- VariableNode.java
+|   |   |           |-- bytecode/
+|   |   |           |   |-- Instruction.java
+|   |   |           |   `-- OpCode.java
 |   |   |           |-- lexer/
 |   |   |           |   |-- Lexer.java
 |   |   |           |   `-- LexerException.java
@@ -55,9 +71,6 @@ CodeForge/
 |   |   |           |-- token/
 |   |   |           |   |-- Token.java
 |   |   |           |   `-- TokenType.java
-|   |   |           |-- bytecode/
-|   |   |           |   |-- Instruction.java
-|   |   |           |   `-- OpCode.java
 |   |   |           `-- vm/
 |   |   |               `-- VirtualMachine.java
 |   |   `-- resources/
@@ -65,16 +78,27 @@ CodeForge/
 |   |           `-- theme.css
 |   `-- test/
 |       `-- java/
-|           `-- com/codeforge/compiler/
-|               |-- lexer/
-|               |   `-- LexerTest.java
-|               `-- parser/
-|                   `-- ParserTest.java
+|           `-- com/codeforge/
+|               |-- compiler/
+|               |   |-- lexer/
+|               |   |   `-- LexerTest.java
+|               |   `-- parser/
+|               |       `-- ParserTest.java
+|               |-- config/
+|               |   `-- ConfigManagerTest.java
+|               |-- editor/
+|               |   `-- EditorTabManagerTest.java
+|               |-- file/
+|               |   `-- FileManagerTest.java
+|               `-- snapshot/
+|                   `-- AISnapshotServiceTest.java
 `-- gradle/
     `-- wrapper/
 
-Current architecture notes:
-- `WorkbenchController` is the orchestration layer for file, editor, terminal, and problems state.
-- `LanguageService` is the current validation/execution facade and is the future insertion point for the custom Python engine.
-- `WorkspaceView` now lazy-loads directory nodes and delegates file actions upward instead of directly owning IDE state.
-- `EditorTabManager` and `TerminalManager` now represent multi-session state rather than one global editor/terminal.
+Current structure notes:
+- `MainApp` builds the JavaFX shell and starts the application services.
+- `WorkbenchController` is the main orchestration layer for editor, file, terminal, diagnostics, and snapshot state.
+- `EditorTabManager` supports both untitled scratch tabs and file-backed tabs.
+- `LanguageService` validates source and delegates runtime execution to `PythonRunner`.
+- `AISnapshotService` summarizes validation state and runtime terminal output.
+- `ConfigManager` loads `.env` values for application configuration.

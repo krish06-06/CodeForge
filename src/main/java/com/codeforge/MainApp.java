@@ -23,6 +23,7 @@ import javafx.stage.Stage;
 public class MainApp extends Application {
 
     private boolean adjustingStageBounds;
+    private CodeForgeBridgeServer bridgeServer;
 
     @Override
     public void start(Stage stage) {
@@ -111,6 +112,8 @@ public class MainApp extends Application {
         stage.setMinHeight(760);
         stage.setScene(scene);
         stage.show();
+        this.bridgeServer = new CodeForgeBridgeServer(workbench);
+        this.bridgeServer.start();
         Platform.runLater(() -> positionStageSafely(stage));
         stage.xProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
         stage.yProperty().addListener((obs, oldValue, newValue) -> keepStageWithinVisibleBounds(stage));
@@ -131,6 +134,13 @@ public class MainApp extends Application {
     public static void main(String[] args) {
         ConfigManager.load();
         launch();
+    }
+
+    @Override
+    public void stop() {
+        if (bridgeServer != null) {
+            bridgeServer.stop();
+        }
     }
 
     private Button createToolbarButton(String icon, String text, boolean accent) {

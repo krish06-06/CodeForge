@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 
 public class TerminalSession {
 
+    private final Object transcriptLock = new Object();
     private final Tab tab;
     private final TerminalView view;
     private final String name;
@@ -37,11 +38,19 @@ public class TerminalSession {
         return name;
     }
 
+    public String getTranscript() {
+        synchronized (transcriptLock) {
+            return transcript.toString();
+        }
+    }
+
     public void attachProcess(Process process, String header, TerminalSessionListener listener) {
         stopProcess();
         this.process = process;
         this.listener = listener;
-        this.transcript = new StringBuilder();
+        synchronized (transcriptLock) {
+            this.transcript = new StringBuilder();
+        }
         this.inputWriter = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
 
         view.clear();
@@ -92,10 +101,14 @@ public class TerminalSession {
             int readCount;
             while ((readCount = reader.read(buffer)) != -1) {
                 String chunk = new String(buffer, 0, readCount);
-                transcript.append(chunk);
+                String currentTranscript;
+                synchronized (transcriptLock) {
+                    transcript.append(chunk);
+                    currentTranscript = transcript.toString();
+                }
                 view.print(chunk);
                 if (listener != null) {
-                    listener.onOutput(this, chunk, transcript.toString());
+                    listener.onOutput(this, chunk, currentTranscript);
                 }
             }
 
@@ -104,7 +117,7 @@ public class TerminalSession {
                 view.setInputHandler(null);
                 view.print("\n[Process finished with exit code " + exitCode + "]\n");
                 if (listener != null) {
-                    listener.onFinished(this, exitCode, transcript.toString());
+                    listener.onFinished(this, exitCode, getTranscript());
                 }
             });
         } catch (Exception ex) {
@@ -112,7 +125,7 @@ public class TerminalSession {
                 view.setInputHandler(null);
                 view.print("\n[Terminal error] " + ex.getMessage() + "\n");
                 if (listener != null) {
-                    listener.onError(this, transcript.toString(), ex.getMessage());
+                    listener.onError(this, getTranscript(), ex.getMessage());
                 }
             });
         }
